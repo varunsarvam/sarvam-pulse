@@ -36,7 +36,7 @@ function parseVisualOptions(
 
 // ─── Stage types ──────────────────────────────────────────────────────────────
 
-type Stage = "ENTRY" | "QUESTION" | "REFLECTION" | "COMPLETE";
+type Stage = "ENTRY" | "QUESTION" | "FOLLOWUP" | "REFLECTION" | "COMPLETE";
 
 // ─── Motion variants ──────────────────────────────────────────────────────────
 
@@ -338,6 +338,59 @@ function QuestionStage({
   );
 }
 
+// ─── Follow-up stage ──────────────────────────────────────────────────────────
+
+function FollowUpStage({
+  prompt,
+  inputType,
+  onAnswer,
+}: {
+  prompt: string;
+  inputType: "voice" | "text";
+  onAnswer: (rawValue: unknown, transcript?: string) => void;
+}) {
+  function handleVoice(v: { type: "voice"; value: string; audioBlob: Blob }) {
+    onAnswer({ type: "voice", value: v.value }, v.value);
+  }
+  function handleText(v: { type: "text"; value: string }) {
+    onAnswer(v);
+  }
+
+  // Stub question satisfies component prop contracts
+  const stubQuestion = {
+    id: "followup",
+    form_id: "",
+    position: -1,
+    prompt,
+    intent: null,
+    input_type: inputType,
+    options: null,
+    follow_up_enabled: false,
+    required: false,
+  } as const;
+
+  return (
+    <div className="flex flex-col gap-6 px-12 py-14 max-w-lg w-full">
+      <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
+        One more thing…
+      </p>
+      <motion.h2
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" as const }}
+        className="text-2xl font-medium leading-snug"
+      >
+        {prompt}
+      </motion.h2>
+      {inputType === "voice" ? (
+        <VoiceInput question={stubQuestion} onSubmit={handleVoice} />
+      ) : (
+        <TextInput question={stubQuestion} onSubmit={handleText} />
+      )}
+    </div>
+  );
+}
+
 function ReflectionStage() {
   return (
     <div className="flex flex-col gap-6 px-12 py-16 max-w-lg w-full">
@@ -377,6 +430,7 @@ export function RespondentFlow({
   const [stage, setStage] = useState<Stage>("ENTRY");
   const [questionIndex, setQuestionIndex] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [followUpPrompt, setFollowUpPrompt] = useState<string | null>(null);
 
   const leftBg = TONE_BG[form.tone] ?? TONE_BG.playful;
 
@@ -407,15 +461,17 @@ export function RespondentFlow({
   }
 
   async function handleAnswer(rawValue: unknown, transcript?: string) {
-    // Persist the answer (best-effort — don't block the flow on failure)
-    if (sessionId && questions[questionIndex]) {
+    const currentQuestion = questions[questionIndex];
+
+    // Persist the answer (best-effort)
+    if (sessionId && currentQuestion) {
       try {
         await fetch("/api/answers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             session_id: sessionId,
-            question_id: questions[questionIndex].id,
+            question_id: currentQuestion.id,
             raw_value: rawValue,
             transcript: transcript ?? null,
           }),
@@ -425,7 +481,66 @@ export function RespondentFlow({
       }
     }
 
-    // Show reflection placeholder for 1.5s, then advance
+    // Check for follow-up only for voice/text when enabled, and only once
+    const eligibleForFollowUp =
+      currentQuestion?.follow_up_enabled &&
+      (currentQuestion.input_type === "voice" ||
+        currentQuestion.input_type === "text") &&
+      typeof transcript === "string" &&
+      transcript.trim().length > 0;
+
+    if (eligibleForFollowUp) {
+      try {
+        const res = await fetch("/api/follow-up", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question_prompt: currentQuestion.prompt,
+            question_intent: currentQuestion.intent,
+            answer_text: transcript,
+            tone: form.tone,
+          }),
+        });
+        if (res.ok) {
+          const { follow_up } = await res.json();
+          if (follow_up) {
+            setFollowUpPrompt(follow_up);
+            setStage("FOLLOWUP");
+            return;
+          }
+        }
+      } catch {
+        // fall through to REFLECTION
+      }
+    }
+
+    goToReflection();
+  }
+
+  async function handleFollowUpAnswer(rawValue: unknown, transcript?: string) {
+    // Persist follow-up answer under the same question_id
+    const currentQuestion = questions[questionIndex];
+    if (sessionId && currentQuestion) {
+      try {
+        await fetch("/api/answers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            question_id: currentQuestion.id,
+            raw_value: rawValue,
+            transcript: transcript ?? null,
+          }),
+        });
+      } catch {
+        // continue regardless
+      }
+    }
+    goToReflection();
+  }
+
+  function goToReflection() {
+    setFollowUpPrompt(null);
     setStage("REFLECTION");
     setTimeout(advanceQuestion, 1500);
   }
@@ -474,6 +589,20 @@ export function RespondentFlow({
                 tone={form.tone}
                 formIntent={form.intent}
                 onAnswer={handleAnswer}
+              />
+            </motion.div>
+          )}
+
+          {stage === "FOLLOWUP" && followUpPrompt && (
+            <motion.div key="followup" {...fadeUp} className="w-full">
+              <FollowUpStage
+                prompt={followUpPrompt}
+                inputType={
+                  questions[questionIndex]?.input_type === "voice"
+                    ? "voice"
+                    : "text"
+                }
+                onAnswer={handleFollowUpAnswer}
               />
             </motion.div>
           )}
