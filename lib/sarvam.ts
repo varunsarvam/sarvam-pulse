@@ -107,7 +107,7 @@ export async function chatComplete(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${SARVAM_API_KEY}`,
+      "api-subscription-key": SARVAM_API_KEY,
     },
     body: JSON.stringify({
       model,
