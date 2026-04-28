@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { AIPresence } from "@/components/AIPresence";
 import { useLiveData } from "@/hooks/useLiveData";
@@ -158,20 +158,89 @@ function EntryScreen({
   );
 }
 
+// ─── Thinking dots ────────────────────────────────────────────────────────────
+
+function ThinkingDots() {
+  return (
+    <div className="flex items-center gap-1.5 h-8">
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="h-2 w-2 rounded-full bg-muted-foreground/50"
+          animate={{ opacity: [0.3, 1, 0.3], y: [0, -4, 0] }}
+          transition={{
+            duration: 0.9,
+            repeat: Infinity,
+            delay: i * 0.18,
+            ease: "easeInOut" as const,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ─── Question stage ───────────────────────────────────────────────────────────
 
 function QuestionStage({
   question,
   index,
   total,
+  sessionId,
+  tone,
+  formIntent,
   onAnswer,
 }: {
   question: Question;
   index: number;
   total: number;
+  sessionId: string | null;
+  tone: string;
+  formIntent: string | null;
   onAnswer: (rawValue: unknown, transcript?: string) => void;
 }) {
   const { input_type, options } = question;
+  const [phrased, setPhrased] = useState<string | null>(null);
+  const [thinking, setThinking] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
+    setPhrased(null);
+    setThinking(true);
+
+    fetch("/api/phrase-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question_prompt: question.prompt,
+        tone,
+        form_intent: formIntent,
+        session_id: sessionId,
+      }),
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then(({ phrased: p }: { phrased: string }) => {
+        if (!cancelled) setPhrased(p);
+      })
+      .catch(() => {
+        if (!cancelled) setPhrased(question.prompt);
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (!cancelled) setThinking(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question.id]);
 
   function handleVoice(v: { type: "voice"; value: string; audioBlob: Blob }) {
     onAnswer({ type: "voice", value: v.value }, v.value);
@@ -202,8 +271,30 @@ function QuestionStage({
         {index + 1} / {total}
       </p>
 
-      {/* Prompt */}
-      <h2 className="text-2xl font-medium leading-snug">{question.prompt}</h2>
+      {/* Prompt — thinking dots until phrasing resolves */}
+      <AnimatePresence mode="wait">
+        {thinking ? (
+          <motion.div
+            key="thinking"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ThinkingDots />
+          </motion.div>
+        ) : (
+          <motion.h2
+            key="prompt"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" as const }}
+            className="text-2xl font-medium leading-snug"
+          >
+            {phrased ?? question.prompt}
+          </motion.h2>
+        )}
+      </AnimatePresence>
 
       {/* Input */}
       {input_type === "voice" && (
@@ -379,6 +470,9 @@ export function RespondentFlow({
                 question={questions[questionIndex]}
                 index={questionIndex}
                 total={questions.length}
+                sessionId={sessionId}
+                tone={form.tone}
+                formIntent={form.intent}
                 onAnswer={handleAnswer}
               />
             </motion.div>
