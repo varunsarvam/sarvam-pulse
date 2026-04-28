@@ -8,7 +8,7 @@ export type InputType =
   | "visual_select";
 
 export type FormTone = "playful" | "calm" | "direct" | "insightful";
-export type FormStatus = "draft" | "published" | "closed";
+export type FormStatus = "draft" | "published";
 
 export interface Form {
   id: string;
@@ -34,34 +34,49 @@ export interface Question {
 export interface Session {
   id: string;
   form_id: string;
-  respondent_id: string | null;
   started_at: string;
   completed_at: string | null;
-  metadata: Record<string, unknown> | null;
+  identity_label: string | null;
+  identity_summary: string | null;
 }
 
 export interface Answer {
   id: string;
   session_id: string;
   question_id: string;
-  value: unknown;
-  raw_transcript: string | null;
+  raw_value: unknown;
+  transcript: string | null;
+  normalized: {
+    cluster: string;
+    is_new: boolean;
+    confidence: number;
+  } | null;
+  sentiment: number | null;
   created_at: string;
 }
+
+export type ReactionType = "fire" | "eyes" | "hundred" | "thinking";
 
 export interface Reaction {
   id: string;
   session_id: string;
   question_id: string;
-  emoji: string;
-  intensity: number | null;
+  reaction: ReactionType;
   created_at: string;
 }
 
+export interface Cluster {
+  label: string;
+  count: number;
+  examples: string[];
+}
+
 export interface Aggregation {
-  id: string;
   question_id: string;
-  aggregation_type: string;
-  result: Record<string, unknown>;
-  computed_at: string;
+  total_responses: number;
+  distribution: Record<string, number>;
+  sentiment_avg: number;
+  recent_quotes: string[];
+  clusters: Cluster[];
+  updated_at: string;
 }
