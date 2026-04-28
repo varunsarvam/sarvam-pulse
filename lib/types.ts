@@ -7,26 +7,28 @@ export type InputType =
   | "this_or_that"
   | "visual_select";
 
+export type FormTone = "playful" | "calm" | "direct" | "insightful";
+export type FormStatus = "draft" | "published" | "closed";
+
 export interface Form {
   id: string;
   title: string;
-  description: string | null;
-  slug: string;
-  owner_id: string;
-  is_published: boolean;
+  intent: string | null;
+  tone: FormTone;
+  status: FormStatus;
   created_at: string;
-  updated_at: string;
 }
 
 export interface Question {
   id: string;
   form_id: string;
-  order: number;
-  input_type: InputType;
+  position: number;
   prompt: string;
-  options: Record<string, unknown> | null;
+  intent: string | null;
+  input_type: InputType;
+  options: unknown | null;
+  follow_up_enabled: boolean;
   required: boolean;
-  created_at: string;
 }
 
 export interface Session {
