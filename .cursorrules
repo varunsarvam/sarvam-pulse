@@ -1,0 +1,44 @@
+# Pulse — Cursor Project Rules
+
+## What this project is
+Pulse is a hackathon-built voice-first conversational form product. The respondent flow turns a series of questions into a live, social experience with AI host and real-time reflections.
+
+## Stack (do not deviate)
+- Next.js 15 with App Router
+- TypeScript
+- Tailwind CSS + shadcn/ui (new-york style, neutral base)
+- Framer Motion for all animations
+- Supabase for database + realtime
+- Sarvam APIs (saarika:v2.5, bulbul:v3, sarvam-m) for STT/TTS/LLM
+- Deployed on Vercel
+
+## Critical rules
+1. Never modify the database schema after Phase 0. Schema is in docs/data-model.md and is frozen.
+2. All Sarvam API calls happen ONLY in API routes (app/api/...), never client-side. The API key must never reach the browser.
+3. Use the existing supabase clients in lib/supabase/. Don't create new ones.
+4. Use TypeScript strict mode. Don't use `any` unless absolutely necessary; prefer `unknown` and narrow.
+5. All new components use shadcn/ui primitives where they exist. Don't reimplement buttons, dialogs, etc.
+6. All animations use Framer Motion, never CSS keyframes. Consistency matters.
+7. Never use localStorage for sensitive data. Session IDs in localStorage are fine; API keys never.
+8. When unsure between two approaches, prefer the simpler one. This is a 24-hour build.
+
+## Code style
+- Functional React components, no classes
+- Prefer named exports over default exports for components
+- Server components by default; mark client components with "use client" at top
+- Use Server Actions for mutations where possible, API routes where realtime/audio is involved
+- Tailwind classes inline, no separate CSS modules
+- File names: kebab-case for routes, PascalCase for components
+
+## Anti-patterns to avoid
+- Don't add Zustand, Redux, or any state library — useState and useReducer are enough
+- Don't add tRPC, GraphQL, or other API abstractions — fetch is fine
+- Don't add testing libraries — no time for tests in this build
+- Don't add i18n, dark mode toggle, or accessibility audit features unless explicitly asked
+- Don't refactor working code "to be cleaner" — leave it alone
+
+## When asked to build a feature
+1. First list files you'll touch and any new dependencies
+2. Ask any clarifying questions before generating
+3. Generate code one file at a time
+4. After all files, summarize what was built and what to test
