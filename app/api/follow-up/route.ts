@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chatComplete } from "@/lib/sarvam";
 
+function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { question_prompt, question_intent, answer_text, tone } =
@@ -29,11 +33,11 @@ export async function POST(req: NextRequest) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      { model: "sarvam-105b", temperature: 0.6, max_tokens: 60 }
+      { model: "sarvam-m", temperature: 0.6, max_tokens: 2048 }
     );
 
-    const content = result.choices?.[0]?.message?.content?.trim() ?? "SKIP";
-    const follow_up = content.toUpperCase() === "SKIP" ? null : content;
+    const content = stripThinking(result.choices?.[0]?.message?.content ?? "");
+    const follow_up = !content || content.toUpperCase() === "SKIP" ? null : content;
 
     return NextResponse.json({ follow_up });
   } catch (e) {

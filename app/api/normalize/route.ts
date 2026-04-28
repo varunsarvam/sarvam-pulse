@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chatComplete } from "@/lib/sarvam";
 
+function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
 interface NormalizeResult {
   cluster: string;
   is_new: boolean;
@@ -51,10 +55,10 @@ export async function POST(req: NextRequest) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      { model: "sarvam-105b", temperature: 0.3, max_tokens: 100 }
+      { model: "sarvam-m", temperature: 0.3, max_tokens: 2048 }
     );
 
-    const raw = result.choices?.[0]?.message?.content?.trim() ?? "";
+    const raw = stripThinking(result.choices?.[0]?.message?.content ?? "");
 
     // Strip markdown code fences if the model wraps its output
     const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
