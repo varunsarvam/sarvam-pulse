@@ -5,7 +5,34 @@ import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { AIPresence } from "@/components/AIPresence";
 import { useLiveData } from "@/hooks/useLiveData";
 import { Button } from "@/components/ui/button";
+import { VoiceInput } from "@/components/inputs/VoiceInput";
+import { TextInput } from "@/components/inputs/TextInput";
+import { EmojiSlider } from "@/components/inputs/EmojiSlider";
+import { Cards } from "@/components/inputs/Cards";
+import { Ranking } from "@/components/inputs/Ranking";
+import { ThisOrThat } from "@/components/inputs/ThisOrThat";
+import { VisualSelect } from "@/components/inputs/VisualSelect";
 import type { Form, Question } from "@/lib/types";
+
+// ─── Option parsers ───────────────────────────────────────────────────────────
+
+function parseStringOptions(opts: unknown): string[] {
+  if (!Array.isArray(opts)) return [];
+  return opts.filter((o): o is string => typeof o === "string");
+}
+
+function parseVisualOptions(
+  opts: unknown
+): { label: string; image_url: string }[] {
+  if (!Array.isArray(opts)) return [];
+  return opts.filter(
+    (o): o is { label: string; image_url: string } =>
+      typeof o === "object" &&
+      o !== null &&
+      typeof (o as Record<string, unknown>).label === "string" &&
+      typeof (o as Record<string, unknown>).image_url === "string"
+  );
+}
 
 // ─── Stage types ──────────────────────────────────────────────────────────────
 
@@ -131,24 +158,91 @@ function EntryScreen({
   );
 }
 
-// ─── Placeholder stages ───────────────────────────────────────────────────────
+// ─── Question stage ───────────────────────────────────────────────────────────
 
-function QuestionStage({ question }: { question: Question }) {
+function QuestionStage({
+  question,
+  index,
+  total,
+  onAnswer,
+}: {
+  question: Question;
+  index: number;
+  total: number;
+  onAnswer: (rawValue: unknown, transcript?: string) => void;
+}) {
+  const { input_type, options } = question;
+
+  function handleVoice(v: { type: "voice"; value: string; audioBlob: Blob }) {
+    onAnswer({ type: "voice", value: v.value }, v.value);
+  }
+  function handleText(v: { type: "text"; value: string }) {
+    onAnswer(v);
+  }
+  function handleSlider(v: { type: "emoji_slider"; value: number }) {
+    onAnswer(v);
+  }
+  function handleCards(v: { type: "cards"; value: string }) {
+    onAnswer(v);
+  }
+  function handleRanking(v: { type: "ranking"; value: string[] }) {
+    onAnswer(v);
+  }
+  function handleThisOrThat(v: { type: "this_or_that"; value: string }) {
+    onAnswer(v);
+  }
+  function handleVisual(v: { type: "visual_select"; value: string }) {
+    onAnswer(v);
+  }
+
   return (
-    <div className="flex flex-col gap-6 px-12 py-16 max-w-lg w-full">
+    <div className="flex flex-col gap-6 px-12 py-14 max-w-lg w-full">
+      {/* Progress */}
       <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
-        Question
+        {index + 1} / {total}
       </p>
+
+      {/* Prompt */}
       <h2 className="text-2xl font-medium leading-snug">{question.prompt}</h2>
-      <div className="rounded-xl border border-dashed border-border p-10 text-center space-y-2">
-        <p className="text-sm text-muted-foreground">
-          Input type:{" "}
-          <span className="font-mono text-foreground">{question.input_type}</span>
-        </p>
-        <p className="text-xs text-muted-foreground/60">
-          Input component — coming in next phase
-        </p>
-      </div>
+
+      {/* Input */}
+      {input_type === "voice" && (
+        <VoiceInput question={question} onSubmit={handleVoice} />
+      )}
+      {input_type === "text" && (
+        <TextInput question={question} onSubmit={handleText} />
+      )}
+      {input_type === "emoji_slider" && (
+        <EmojiSlider question={question} onSubmit={handleSlider} />
+      )}
+      {input_type === "cards" && (
+        <Cards
+          question={question}
+          options={parseStringOptions(options)}
+          onSubmit={handleCards}
+        />
+      )}
+      {input_type === "ranking" && (
+        <Ranking
+          question={question}
+          options={parseStringOptions(options)}
+          onSubmit={handleRanking}
+        />
+      )}
+      {input_type === "this_or_that" && (
+        <ThisOrThat
+          question={question}
+          options={parseStringOptions(options)}
+          onSubmit={handleThisOrThat}
+        />
+      )}
+      {input_type === "visual_select" && (
+        <VisualSelect
+          question={question}
+          options={parseVisualOptions(options)}
+          onSubmit={handleVisual}
+        />
+      )}
     </div>
   );
 }
@@ -212,9 +306,6 @@ export function RespondentFlow({
     setStage("QUESTION");
   }
 
-  // Exposed for future use by child components
-  void sessionId;
-
   function advanceQuestion() {
     if (questionIndex + 1 < questions.length) {
       setQuestionIndex((i) => i + 1);
@@ -224,7 +315,29 @@ export function RespondentFlow({
     }
   }
 
-  void advanceQuestion;
+  async function handleAnswer(rawValue: unknown, transcript?: string) {
+    // Persist the answer (best-effort — don't block the flow on failure)
+    if (sessionId && questions[questionIndex]) {
+      try {
+        await fetch("/api/answers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            question_id: questions[questionIndex].id,
+            raw_value: rawValue,
+            transcript: transcript ?? null,
+          }),
+        });
+      } catch {
+        // continue regardless
+      }
+    }
+
+    // Show reflection placeholder for 1.5s, then advance
+    setStage("REFLECTION");
+    setTimeout(advanceQuestion, 1500);
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -262,7 +375,12 @@ export function RespondentFlow({
               {...fadeUp}
               className="w-full"
             >
-              <QuestionStage question={questions[questionIndex]} />
+              <QuestionStage
+                question={questions[questionIndex]}
+                index={questionIndex}
+                total={questions.length}
+                onAnswer={handleAnswer}
+              />
             </motion.div>
           )}
 
