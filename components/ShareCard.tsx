@@ -9,6 +9,7 @@ interface ShareCardProps {
     highlights?: string[];
   };
   tone: FormTone;
+  respondentName?: string | null;
 }
 
 const TONE_GRADIENT: Record<
@@ -45,7 +46,7 @@ const TONE_GRADIENT: Record<
   },
 };
 
-export function ShareCard({ identity, tone }: ShareCardProps) {
+export function ShareCard({ identity, tone, respondentName }: ShareCardProps) {
   const g = TONE_GRADIENT[tone];
 
   return (
@@ -93,8 +94,10 @@ export function ShareCard({ identity, tone }: ShareCardProps) {
 
       {/* Middle: identity */}
       <div className="relative z-10 flex flex-col gap-3">
-        <p className="text-xs font-medium tracking-[0.2em] uppercase text-white/70">
-          I am a
+        <p className="text-xs font-medium tracking-[0.18em] uppercase text-white/70">
+          {respondentName
+            ? `${respondentName} took Pulse and discovered they're a`
+            : "I am a"}
         </p>
         <h2 className="text-3xl font-bold leading-[1.1] tracking-tight text-white drop-shadow-sm">
           {identity.label}

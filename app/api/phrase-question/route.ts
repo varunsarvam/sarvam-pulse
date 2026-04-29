@@ -40,7 +40,14 @@ export async function POST(req: NextRequest) {
   try {
     console.time("phrase-total");
     const body = await req.json();
-    const { tone, form_intent, previous_answers, session_id, response_mode } = body;
+    const {
+      tone,
+      form_intent,
+      previous_answers,
+      session_id,
+      response_mode,
+      respondent_name,
+    } = body;
     question_prompt = body.question_prompt ?? "";
 
     if (!question_prompt || !tone) {
@@ -85,6 +92,9 @@ Good rewrites:
       `You are the host of a conversational form. Your job is to REWRITE the given question — never return it unchanged. Every output must differ from the input in opening, rhythm, and word choice while preserving the question's exact meaning.`,
       ``,
       `Tone: ${tone}.${form_intent ? ` Form intent: ${form_intent}.` : ""}`,
+      typeof respondent_name === "string" && respondent_name.trim()
+        ? `The respondent's name is ${respondent_name.trim()}. You may occasionally address them by name when it feels natural — sparingly, not every question. Don't force it; if a question doesn't naturally invite a name, skip it.`
+        : "",
       ``,
       `Hard rules:`,
       `- Output is ALWAYS a rewrite. Never echo the original wording.`,

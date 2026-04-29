@@ -123,6 +123,20 @@ function shuffleStrings(values: string[]): string[] {
   return next;
 }
 
+function normalizeRespondentName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function validateRespondentName(value: string): string | null {
+  const normalized = normalizeRespondentName(value);
+  if (!normalized) return "Tell us what to call you.";
+  if (normalized.length > 30) return "Keep it under 30 characters.";
+  if (!/^[A-Za-z][A-Za-z\s'-]{0,29}$/.test(normalized)) {
+    return "Use letters, spaces, apostrophes, or hyphens.";
+  }
+  return null;
+}
+
 function EntryScreen({
   form,
   questions,
@@ -350,13 +364,31 @@ function SetupScreen({
   progress,
   canContinue,
   hasError,
+  name,
+  nameError,
+  onNameChange,
   onContinue,
 }: {
   progress: number;
   canContinue: boolean;
   hasError: boolean;
+  name: string;
+  nameError: string | null;
+  onNameChange: (value: string) => void;
   onContinue: () => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && canContinue) {
+      onContinue();
+    }
+  }
+
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
       <div className="relative z-10 flex flex-col gap-7 px-12 py-16 max-w-lg w-full">
@@ -371,6 +403,23 @@ function SetupScreen({
             Pulse listens, responds, and shows you where you stand on every
             answer. Find a quiet moment. We&apos;ll need mic access in a moment.
           </p>
+        </div>
+
+        <div className="w-full max-w-sm">
+          <input
+            ref={inputRef}
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="What should we call you?"
+            className="w-full rounded-2xl border border-border/70 bg-background/60 px-5 py-4 text-lg text-foreground placeholder:text-muted-foreground/45 shadow-sm outline-none transition-colors focus:border-foreground/30"
+            maxLength={30}
+          />
+          {nameError && (
+            <p className="mt-2 text-xs text-muted-foreground/70">
+              {nameError}
+            </p>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -427,6 +476,7 @@ function QuestionStage({
   ttsDone,
   preamble,
   preloaded,
+  respondentName,
 }: {
   question: Question;
   index: number;
@@ -440,6 +490,7 @@ function QuestionStage({
   ttsDone: boolean;
   preamble?: string;
   preloaded?: PreloadItem | null;
+  respondentName?: string | null;
 }) {
   const { input_type, options } = question;
   const [phrased, setPhrased] = useState<string | null>(null);
@@ -585,6 +636,7 @@ function QuestionStage({
         tone,
         form_intent: formIntent,
         session_id: sessionId,
+        respondent_name: respondentName,
       }),
       signal: controller.signal,
     })
@@ -790,6 +842,7 @@ function FollowUpStage({
   ttsDisplayText,
   ttsDone,
   preloaded,
+  respondentName,
 }: {
   prompt: string;
   inputType: "voice" | "text";
@@ -801,6 +854,7 @@ function FollowUpStage({
   ttsDisplayText: string;
   ttsDone: boolean;
   preloaded?: PreloadItem | null;
+  respondentName?: string | null;
 }) {
   // Stub question satisfies component prop contracts
   const stubQuestion = {
@@ -829,6 +883,7 @@ function FollowUpStage({
       ttsDone={ttsDone}
       preamble="One more thing…"
       preloaded={preloaded}
+      respondentName={respondentName}
     />
   );
 }
@@ -895,6 +950,8 @@ export function RespondentFlow({
   const [stage, setStage] = useState<Stage>("ENTRY");
   const [questionIndex, setQuestionIndex] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [respondentName, setRespondentName] = useState("");
+  const [respondentNameSaved, setRespondentNameSaved] = useState<string | null>(null);
   const [followUpPrompt, setFollowUpPrompt] = useState<string | null>(null);
   const [reflectionData, setReflectionData] = useState<ReflectionResult | null>(null);
   const [nullReason, setNullReason] = useState<NullReflectionReason | null>(null);
@@ -939,6 +996,8 @@ export function RespondentFlow({
   }, [muted]);
 
   const leftBg = TONE_BG[form.tone] ?? TONE_BG.playful;
+  const respondentNameError = respondentName ? validateRespondentName(respondentName) : "Tell us what to call you.";
+  const respondentNameValid = respondentNameError === null;
 
   function handlePhrasedReady(text: string, audioUrl?: string | null) {
     setPhrasedForTTS(text);
@@ -948,6 +1007,7 @@ export function RespondentFlow({
   async function preloadQuestion(
     q: Question,
     activeSessionId: string,
+    activeName: string | null,
     onAssetDone: () => void
   ) {
     const phraseRes = await fetch("/api/phrase-question", {
@@ -958,6 +1018,7 @@ export function RespondentFlow({
         tone: form.tone,
         form_intent: form.intent,
         session_id: activeSessionId,
+        respondent_name: activeName,
         response_mode: "json",
       }),
     });
@@ -980,7 +1041,7 @@ export function RespondentFlow({
     onAssetDone();
   }
 
-  async function preloadAll(activeSessionId: string) {
+  async function preloadAll(activeSessionId: string, activeName: string | null) {
     if (preloadStartedRef.current) return;
     preloadStartedRef.current = true;
     setPreloadProgress(0);
@@ -994,7 +1055,7 @@ export function RespondentFlow({
     };
 
     const results = await Promise.allSettled(
-      questions.map((q) => preloadQuestion(q, activeSessionId, markDone))
+      questions.map((q) => preloadQuestion(q, activeSessionId, activeName, markDone))
     );
 
     if (results.some((r) => r.status === "rejected")) {
@@ -1023,10 +1084,44 @@ export function RespondentFlow({
   }, [stage]);
 
   useEffect(() => {
-    if (stage !== "SETUP" || preloadProgress < 1) return;
-    const autoTimer = setTimeout(() => setStage("QUESTION"), 8000);
+    if (stage !== "SETUP" || preloadProgress < 1 || !respondentNameValid) return;
+    const autoTimer = setTimeout(() => {
+      void handleSetupContinue();
+    }, 8000);
     return () => clearTimeout(autoTimer);
-  }, [stage, preloadProgress]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, preloadProgress, respondentNameValid]);
+
+  useEffect(() => {
+    if (stage !== "SETUP" || !sessionId || !respondentNameValid) return;
+    void preloadAll(sessionId, normalizeRespondentName(respondentName));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, sessionId, respondentNameValid, respondentName]);
+
+  async function handleSetupContinue() {
+    if (!sessionId || !respondentNameValid) return;
+    const name = normalizeRespondentName(respondentName);
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          respondent_name: name,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { respondent_name?: string | null };
+        setRespondentNameSaved(data.respondent_name ?? name);
+      } else {
+        setRespondentNameSaved(name);
+      }
+    } catch {
+      setRespondentNameSaved(name);
+    }
+    setAvatarMode("thinking");
+    setStage("QUESTION");
+  }
 
   // Preload next question phrasing during reflection
   const preloadNextQuestion = useCallback(() => {
@@ -1035,8 +1130,8 @@ export function RespondentFlow({
     const nextQ = questions[nextIdx];
     if (preloadCacheRef.current.has(nextQ.id)) return;
 
-    void preloadQuestion(nextQ, sessionId, () => {});
-  }, [questionIndex, questions, form.tone, form.intent, sessionId]);
+    void preloadQuestion(nextQ, sessionId, respondentNameSaved, () => {});
+  }, [questionIndex, questions, form.tone, form.intent, sessionId, respondentNameSaved]);
 
   useEffect(() => {
     if (stage === "REFLECTION") {
@@ -1066,7 +1161,6 @@ export function RespondentFlow({
         setSessionId(id);
         setAvatarMode("idle");
         setStage("SETUP");
-        void preloadAll(id);
         return;
       }
     } catch {
@@ -1342,13 +1436,15 @@ export function RespondentFlow({
               <SetupScreen
                 progress={preloadProgress}
                 canContinue={
-                  setupMinElapsed && (preloadProgress >= 0.6 || preloadError)
+                  respondentNameValid &&
+                  setupMinElapsed &&
+                  (preloadProgress >= 0.6 || preloadError)
                 }
                 hasError={preloadError}
-                onContinue={() => {
-                  setAvatarMode("thinking");
-                  setStage("QUESTION");
-                }}
+                name={respondentName}
+                nameError={respondentName ? respondentNameError : null}
+                onNameChange={setRespondentName}
+                onContinue={handleSetupContinue}
               />
             </motion.div>
           )}
@@ -1371,6 +1467,7 @@ export function RespondentFlow({
                 ttsDisplayText={ttsDisplayText}
                 ttsDone={ttsDone}
                 preloaded={preloadCacheRef.current.get(questions[questionIndex].id) ?? null}
+                respondentName={respondentNameSaved}
               />
             </motion.div>
           )}
@@ -1391,6 +1488,7 @@ export function RespondentFlow({
                 onPhrasedReady={handlePhrasedReady}
                 ttsDisplayText={ttsDisplayText}
                 ttsDone={ttsDone}
+                respondentName={respondentNameSaved}
               />
             </motion.div>
           )}

@@ -431,14 +431,18 @@ export function pickReflectionWithDebug(
 export async function generateReflectionCopy(
   type: ReflectionType,
   payload: Record<string, unknown>,
-  context: { questionPrompt: string; answerText?: string }
+  context: { questionPrompt: string; answerText?: string; respondentName?: string | null }
 ): Promise<string | null> {
   const answerLine = context.answerText?.trim()
     ? `Their answer: ${context.answerText.trim()}`
     : null;
+  const nameLine = context.respondentName?.trim()
+    ? `The respondent's name is ${context.respondentName.trim()}. Address them naturally when it fits — not every reflection, just occasionally. Don't force it.`
+    : null;
 
   const systemPrompt = [
     "You generate a single short reflection for someone who just answered a question. The reflection shows them how their answer compares to others — making them feel seen.",
+    nameLine,
     "",
     "Style:",
     "- 1-2 sentences, max 22 words",

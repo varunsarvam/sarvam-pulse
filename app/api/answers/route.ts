@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     // ── Phase 1: insert answer + fetch question + read aggregation (parallel) ─
 
-    const [insertRes, questionRes, aggRes] = await Promise.all([
+    const [insertRes, questionRes, aggRes, sessionRes] = await Promise.all([
       supabase
         .from("answers")
         .insert({
@@ -115,6 +115,11 @@ export async function POST(req: NextRequest) {
         .from("aggregations")
         .select("*")
         .eq("question_id", question_id)
+        .maybeSingle(),
+      supabase
+        .from("sessions")
+        .select("respondent_name")
+        .eq("id", session_id)
         .maybeSingle(),
     ]);
 
@@ -145,6 +150,10 @@ export async function POST(req: NextRequest) {
     const inputType = question.input_type;
     const isOpenEnded = inputType === "voice" || inputType === "text";
     const reflectionHistory = parseReflectionHistory(reflection_history);
+    const respondentName =
+      typeof sessionRes.data?.respondent_name === "string"
+        ? sessionRes.data.respondent_name
+        : null;
 
     // ── Phase 2: normalize (voice/text only, needs existing clusters) ─────────
 
@@ -375,6 +384,7 @@ export async function POST(req: NextRequest) {
         {
           questionPrompt: question.prompt,
           answerText: extractAnswerText(raw_value, transcript ?? null),
+          respondentName,
         }
       );
       if (generated && generated.length > 0 && generated.length < 200) {

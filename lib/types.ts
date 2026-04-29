@@ -38,6 +38,7 @@ export interface Session {
   completed_at: string | null;
   identity_label: string | null;
   identity_summary: string | null;
+  respondent_name?: string | null;
 }
 
 export interface Answer {

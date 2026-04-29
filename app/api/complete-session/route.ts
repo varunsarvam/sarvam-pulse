@@ -27,6 +27,10 @@ interface AnswerWithQuestion {
   } | null;
 }
 
+interface SessionNameRow {
+  respondent_name: string | null;
+}
+
 function extractAnswerText(
   raw: { type?: string; value?: unknown } | null,
   transcript: string | null
@@ -150,6 +154,16 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
+    const { data: sessionData } = await supabase
+      .from("sessions")
+      .select("respondent_name")
+      .eq("id", session_id)
+      .maybeSingle();
+    const respondentName =
+      typeof (sessionData as SessionNameRow | null)?.respondent_name === "string"
+        ? (sessionData as SessionNameRow).respondent_name
+        : null;
+
     // ── Phase 1: Fetch all answers joined with their question ──
     const { data: answersData, error: answersError } = await supabase
       .from("answers")
@@ -201,10 +215,15 @@ export async function POST(req: NextRequest) {
       .join("\n\n");
 
     // ── Phase 3: Call Sarvam-105B for identity ──
+    const nameInstruction = respondentName
+      ? `\n\nThe respondent is named ${respondentName}. The summary should be in second person, addressing them by name once or twice — like '${respondentName}, here's what we heard...' Make it feel personally written for them. The label itself stays archetype-only; do not include the name in the label.`
+      : "";
+
     const systemPrompt = `Given a respondent's answers across a form about how they live with AI, generate:
 1. An identity label - 2-4 words, evocative, like 'Curious Skeptic' or 'Quiet Optimist' or 'Bold Pragmatist' or 'Cautious Adopter'. It should feel like a personality archetype that captures their stance.
 2. A 1-2 sentence summary of their perspective in their own voice.
 3. 3 standout 'highlights' - their most distinctive moments from the form.
+${nameInstruction}
 
 Output strict JSON only, no preamble or markdown: { "label": "...", "summary": "...", "highlights": ["...", "...", "..."] }`;
 
@@ -285,7 +304,7 @@ Output strict JSON only, no preamble or markdown: { "label": "...", "summary": "
       }
     }
 
-    return NextResponse.json({ identity, percentiles });
+    return NextResponse.json({ identity, percentiles, respondent_name: respondentName });
   } catch (e) {
     console.error("[complete-session] error:", e);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

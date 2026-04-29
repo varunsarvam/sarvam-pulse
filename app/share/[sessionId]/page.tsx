@@ -13,6 +13,7 @@ interface SharePageProps {
 interface SessionRow {
   id: string;
   form_id: string;
+  respondent_name: string | null;
   identity_label: string | null;
   identity_summary: string | null;
   forms: {
@@ -30,6 +31,7 @@ async function fetchSession(sessionId: string): Promise<SessionRow | null> {
       `
       id,
       form_id,
+      respondent_name,
       identity_label,
       identity_summary,
       forms ( id, title, tone )
@@ -56,9 +58,11 @@ export async function generateMetadata({
     };
   }
 
-  const title = `I'm a ${session.identity_label}`;
+  const title = session.respondent_name
+    ? `${session.respondent_name} is a ${session.identity_label}`
+    : `I'm a ${session.identity_label}`;
   const description =
-    session.identity_summary ??
+    session.identity_summary?.split(/(?<=[.!?])\s+/)[0] ??
     "Discover your identity through Pulse — a voice-first conversational form.";
 
   return {
@@ -111,6 +115,7 @@ export default async function SharePage({ params }: SharePageProps) {
     label: session.identity_label,
     summary: session.identity_summary,
   };
+  const respondentName = session.respondent_name;
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12 bg-gradient-to-b from-background via-background to-muted/20">
@@ -119,12 +124,17 @@ export default async function SharePage({ params }: SharePageProps) {
           Someone shared their identity
         </p>
 
-        <ShareCard identity={identity} tone={tone} />
+        <ShareCard
+          identity={identity}
+          tone={tone}
+          respondentName={respondentName}
+        />
 
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-            They took &ldquo;{session.forms.title}&rdquo; on Pulse — a voice-first
-            conversational form. Curious what it would say about you?
+            {respondentName
+              ? `${respondentName} took “${session.forms.title}” on Pulse. Curious what it would say about you?`
+              : `They took “${session.forms.title}” on Pulse — a voice-first conversational form. Curious what it would say about you?`}
           </p>
           <Link href={`/respond/${session.form_id}`}>
             <Button size="lg" className="text-base px-8">

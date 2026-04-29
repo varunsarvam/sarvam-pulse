@@ -201,10 +201,12 @@ function ShareSection({
   identity,
   sessionId,
   tone,
+  respondentName,
 }: {
   identity: Identity;
   sessionId: string;
   tone: Form["tone"];
+  respondentName: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -258,7 +260,7 @@ function ShareSection({
     >
       {/* Visual share card */}
       <div ref={cardRef}>
-        <ShareCard identity={identity} tone={tone} />
+        <ShareCard identity={identity} tone={tone} respondentName={respondentName} />
       </div>
 
       {/* Action buttons */}
@@ -301,6 +303,7 @@ export function CompleteStage({
   const [phase, setPhase] = useState<Phase>("loading");
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [percentiles, setPercentiles] = useState<Percentile[]>([]);
+  const [respondentName, setRespondentName] = useState<string | null>(null);
   const fetchedRef = useRef(false);
 
   // Fetch identity once
@@ -318,9 +321,11 @@ export function CompleteStage({
         const data = (await res.json()) as {
           identity: Identity;
           percentiles: Percentile[];
+          respondent_name?: string | null;
         };
         setIdentity(data.identity);
         setPercentiles(data.percentiles ?? []);
+        setRespondentName(data.respondent_name ?? null);
         setPhase("intro");
       })
       .catch((e) => {
@@ -336,6 +341,7 @@ export function CompleteStage({
             "Made it through the whole form",
           ],
         });
+        setRespondentName(null);
         setPhase("intro");
       });
   }, [sessionId]);
@@ -387,7 +393,9 @@ export function CompleteStage({
             transition={{ duration: 0.5 }}
             className="text-sm font-medium tracking-widest uppercase text-muted-foreground"
           >
-            Here&apos;s what we heard…
+            {respondentName
+              ? `Here's what we heard, ${respondentName}…`
+              : "Here's what we heard…"}
           </motion.p>
         )}
       </AnimatePresence>
@@ -490,6 +498,7 @@ export function CompleteStage({
               identity={identity}
               sessionId={sessionId}
               tone={form.tone}
+              respondentName={respondentName}
             />
             <p className="text-xs text-muted-foreground/70">
               Thanks for completing &ldquo;{form.title}&rdquo;

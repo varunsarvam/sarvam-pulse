@@ -56,6 +56,8 @@ create table sessions (
 
   completed_at timestamptz,
 
+  respondent_name text, -- optional display name for personalization
+
   identity_label text, -- e.g. "Curious Skeptic" - generated at completion
 
   identity_summary text -- 1-2 sentence summary
