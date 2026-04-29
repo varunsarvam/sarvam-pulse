@@ -27,7 +27,9 @@ const REACTIONS = [
   { key: "thinking", emoji: "🤔" },
 ] as const;
 
-const AUTO_ADVANCE_MS = 2500;
+const CONTINUE_READY_MS = 5000;
+const AUTO_ADVANCE_MS = 9000;
+const REACTION_ADVANCE_MS = 1200;
 
 const CIRCLE_R = 44;
 const CIRCLE_C = 2 * Math.PI * CIRCLE_R;
@@ -287,23 +289,66 @@ export function Reflection({
   onDone,
 }: ReflectionProps) {
   const [reacted, setReacted] = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showContinue, setShowContinue] = useState(false);
+  const continueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doneRef = useRef(false);
+
+  function clearTimers() {
+    if (continueTimerRef.current) {
+      clearTimeout(continueTimerRef.current);
+      continueTimerRef.current = null;
+    }
+    if (advanceTimerRef.current) {
+      clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  }
 
   const advance = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
-    if (timerRef.current) clearTimeout(timerRef.current);
+    clearTimers();
     onDone();
   }, [onDone]);
 
-  // Auto-advance after 2.5s if no emoji tap
+  // Let people read first, then invite manual advance before auto-advance.
   useEffect(() => {
-    timerRef.current = setTimeout(advance, AUTO_ADVANCE_MS);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
+    continueTimerRef.current = setTimeout(
+      () => setShowContinue(true),
+      CONTINUE_READY_MS
+    );
+    advanceTimerRef.current = setTimeout(advance, AUTO_ADVANCE_MS);
+    return clearTimers;
   }, [advance]);
+
+  function handleContinue() {
+    if (!showContinue) return;
+    advance();
+  }
+
+  function handleCardClick() {
+    if (showContinue) advance();
+  }
+
+  function handleCardKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (!showContinue) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      advance();
+    }
+  }
+
+  function scheduleReactionAdvance() {
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    advanceTimerRef.current = setTimeout(advance, REACTION_ADVANCE_MS);
+  }
+
+  useEffect(() => {
+    return () => {
+      clearTimers();
+    };
+  }, []);
 
   function handleReaction(key: string) {
     if (reacted) return;
@@ -321,18 +366,23 @@ export function Reflection({
       }).catch(() => {});
     }
 
-    setTimeout(advance, 350);
+    scheduleReactionAdvance();
   }
 
   const { type, copy, payload } = reflection;
-  const showDebug = process.env.NEXT_PUBLIC_REFLECTION_DEBUG === "true";
 
   return (
     <>
       {/* Emotion wash — behind everything, full-screen */}
       {type === "emotion" && <EmotionWash payload={payload} />}
 
-      <div className="relative z-10 flex flex-col items-center justify-center gap-8 px-12 py-14 max-w-lg w-full mx-auto">
+      <div
+        className="relative z-10 flex flex-col items-center justify-center gap-8 px-12 py-14 max-w-lg w-full mx-auto"
+        role={showContinue ? "button" : undefined}
+        tabIndex={showContinue ? 0 : undefined}
+        onClick={handleCardClick}
+        onKeyDown={handleCardKeyDown}
+      >
         {/* Type-specific visual */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -357,9 +407,9 @@ export function Reflection({
           {copy}
         </motion.p>
 
-        {showDebug && reflection.source && (
-          <p className="self-end text-xs uppercase text-muted-foreground/40">
-            [{reflection.source === "llm" ? "LLM" : "FALLBACK"}]
+        {reflection.source && (
+          <p className="absolute bottom-3 right-4 text-xs uppercase text-muted-foreground/40">
+            {reflection.source === "llm" ? "{llm}" : "{fallback}"}
           </p>
         )}
 
@@ -392,6 +442,22 @@ export function Reflection({
             </motion.button>
           ))}
         </motion.div>
+
+        {showContinue && (
+          <motion.button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleContinue();
+            }}
+            className="text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: [0.6, 1, 0.6], y: 0 }}
+            transition={{ opacity: { duration: 2, repeat: Infinity }, y: { duration: 0.2 } }}
+          >
+            Continue →
+          </motion.button>
+        )}
       </div>
     </>
   );

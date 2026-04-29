@@ -1016,7 +1016,7 @@ export function RespondentFlow({
     playTick();
     setStage("REFLECTION");
     if (!ref) {
-      nullReflectionTimerRef.current = setTimeout(advanceQuestion, 800);
+      nullReflectionTimerRef.current = setTimeout(advanceQuestion, 2000);
     }
   }
 
