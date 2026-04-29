@@ -50,18 +50,18 @@ export function ShareCard({ identity, tone }: ShareCardProps) {
 
   return (
     <div
-      className="relative w-[360px] h-[504px] rounded-3xl overflow-hidden flex flex-col justify-between p-8 shadow-2xl"
+      className="relative w-[300px] h-[380px] rounded-3xl overflow-hidden flex flex-col justify-between p-6 shadow-2xl"
       style={{
         background: `linear-gradient(135deg, ${g.from} 0%, ${g.via} 50%, ${g.to} 100%)`,
       }}
     >
       {/* Decorative orbs */}
       <div
-        className="absolute -top-16 -right-16 w-48 h-48 rounded-full blur-3xl opacity-60 pointer-events-none"
+        className="absolute -top-14 -right-14 w-40 h-40 rounded-full blur-3xl opacity-60 pointer-events-none"
         style={{ background: g.accent }}
       />
       <div
-        className="absolute -bottom-20 -left-12 w-56 h-56 rounded-full blur-3xl opacity-40 pointer-events-none"
+        className="absolute -bottom-16 -left-10 w-44 h-44 rounded-full blur-3xl opacity-40 pointer-events-none"
         style={{ background: g.from }}
       />
       <div
@@ -92,14 +92,14 @@ export function ShareCard({ identity, tone }: ShareCardProps) {
       </div>
 
       {/* Middle: identity */}
-      <div className="relative z-10 flex flex-col gap-4">
+      <div className="relative z-10 flex flex-col gap-3">
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-white/70">
           I am a
         </p>
-        <h2 className="text-4xl font-bold leading-[1.1] tracking-tight text-white drop-shadow-sm">
+        <h2 className="text-3xl font-bold leading-[1.1] tracking-tight text-white drop-shadow-sm">
           {identity.label}
         </h2>
-        <p className="text-sm leading-relaxed text-white/85 max-w-[260px]">
+        <p className="text-xs leading-relaxed text-white/85 max-w-[230px]">
           {identity.summary}
         </p>
       </div>

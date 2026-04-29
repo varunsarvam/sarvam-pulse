@@ -132,7 +132,7 @@ function TypewriterSummary({ text }: { text: string }) {
 
 function HighlightCards({ highlights }: { highlights: string[] }) {
   return (
-    <div className="flex flex-col gap-3 w-full max-w-md">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-2xl">
       {highlights.map((h, i) => (
         <motion.div
           key={i}
@@ -143,9 +143,9 @@ function HighlightCards({ highlights }: { highlights: string[] }) {
             delay: i * 0.4,
             ease: [0.16, 1, 0.3, 1],
           }}
-          className="rounded-xl border border-border bg-card/60 backdrop-blur p-4 text-sm text-foreground/90 leading-relaxed"
+          className="rounded-xl border border-border bg-card/60 backdrop-blur p-3 text-xs text-foreground/90 leading-relaxed"
         >
-          <span className="text-xs text-muted-foreground/70 mr-2">
+          <span className="text-[10px] text-muted-foreground/70 mr-2">
             {String(i + 1).padStart(2, "0")}
           </span>
           {h}
@@ -254,7 +254,7 @@ function ShareSection({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="flex flex-col items-center gap-5 w-full"
+      className="flex flex-col items-center gap-4 w-full"
     >
       {/* Visual share card */}
       <div ref={cardRef}>
@@ -262,7 +262,7 @@ function ShareSection({
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-3 w-full max-w-md">
+      <div className="flex gap-3 w-full max-w-sm">
         <Button
           variant="outline"
           onClick={handleCopy}
@@ -375,7 +375,7 @@ export function CompleteStage({
   }
 
   return (
-    <div className="flex flex-col items-center justify-start px-6 md:px-12 py-12 md:py-16 max-w-xl w-full mx-auto gap-10 overflow-y-auto">
+    <div className="flex h-full flex-col items-center justify-start px-6 md:px-12 py-8 md:py-10 max-w-2xl w-full mx-auto gap-6 md:gap-8 overflow-y-auto">
       {/* Phase 1: Intro */}
       <AnimatePresence>
         {phase === "intro" && (
@@ -404,7 +404,7 @@ export function CompleteStage({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4 }}
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-1.5"
           >
             <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
               You are
@@ -484,7 +484,7 @@ export function CompleteStage({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4 }}
-            className="w-full flex flex-col items-center gap-4 pt-4"
+            className="w-full flex flex-col items-center gap-3 pt-2"
           >
             <ShareSection
               identity={identity}

@@ -103,6 +103,19 @@ interface FloatingQuote {
   id: number;
   text: string;
   xOffset: number;
+  yBase: number;
+  fontScale: number;
+  duration: number;
+  yPath: [number, number, number, number];
+}
+
+function shuffleStrings(values: string[]): string[] {
+  const next = [...values];
+  for (let i = next.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
 }
 
 function EntryScreen({
@@ -124,25 +137,72 @@ function EntryScreen({
 
   const quotesPoolRef = useRef<string[]>([]);
   const quoteCounterRef = useRef(0);
+  const recentlyShownRef = useRef<string[]>([]);
+  const quoteTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
-    quotesPoolRef.current = quotes;
+    quotesPoolRef.current = shuffleStrings(quotes);
   }, [quotes]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const reshuffleInterval = setInterval(() => {
+      quotesPoolRef.current = shuffleStrings(quotesPoolRef.current);
+    }, 30_000);
+
+    function clearQuote(id: number, delay: number) {
+      const timeout = setTimeout(() => {
+        setVisibleQuotes((prev) => prev.filter((q) => q.id !== id));
+      }, delay);
+      quoteTimeoutsRef.current.push(timeout);
+    }
+
+    function mountQuote(delay = 0) {
       const pool = quotesPoolRef.current;
       if (pool.length === 0) return;
-      const text = pool[quoteCounterRef.current % pool.length];
+      const recent = new Set(recentlyShownRef.current);
+      const candidates = pool.filter((q) => !recent.has(q));
+      const source = candidates.length > 0 ? candidates : pool;
+      const text = source[Math.floor(Math.random() * source.length)];
       quoteCounterRef.current++;
       const id = quoteCounterRef.current;
-      const xOffset = (id * 37) % 40;
-      setVisibleQuotes((prev) => [...prev.slice(-4), { id, text, xOffset }]);
-      setTimeout(() => {
-        setVisibleQuotes((prev) => prev.filter((q) => q.id !== id));
-      }, 6000);
+
+      recentlyShownRef.current = [...recentlyShownRef.current.slice(-4), text];
+
+      setVisibleQuotes((prev) => {
+        const yBase = Math.floor(Math.random() * 96);
+        const tooClose = prev.some((q) => Math.abs(q.yBase - yBase) < 60);
+        if (tooClose && delay === 0) {
+          const timeout = setTimeout(() => mountQuote(800), 800);
+          quoteTimeoutsRef.current.push(timeout);
+          return prev;
+        }
+
+        const duration = 5 + Math.random() * 2;
+        const rise = 82 + Math.random() * 34;
+        const quote: FloatingQuote = {
+          id,
+          text,
+          xOffset: Math.floor(Math.random() * 201),
+          yBase,
+          fontScale: 0.85 + Math.random() * 0.2,
+          duration,
+          yPath: [70, 35, 0, -rise],
+        };
+        clearQuote(id, duration * 1000);
+        return [...prev.slice(-4), quote];
+      });
+    }
+
+    const interval = setInterval(() => {
+      mountQuote();
     }, 2000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(reshuffleInterval);
+      quoteTimeoutsRef.current.forEach(clearTimeout);
+      quoteTimeoutsRef.current = [];
+    };
   }, []);
 
   async function handleStart() {
@@ -193,18 +253,22 @@ function EntryScreen({
         </div>
 
         {/* Floating quotes */}
-        <div className="relative min-h-[120px] overflow-hidden">
+        <div className="relative min-h-[150px] overflow-hidden">
           <AnimatePresence>
             {visibleQuotes.length > 0 ? (
               visibleQuotes.map((vq) => (
                 <motion.p
                   key={vq.id}
                   className="absolute text-sm text-muted-foreground/40 italic leading-relaxed"
-                  style={{ paddingLeft: `${vq.xOffset}px` }}
-                  initial={{ opacity: 0, y: 80 }}
-                  animate={{ opacity: [0, 0.6, 0.6, 0], y: [80, 40, 10, -20] }}
+                  style={{
+                    left: `${vq.xOffset}px`,
+                    top: `${vq.yBase}px`,
+                    fontSize: `${vq.fontScale}em`,
+                  }}
+                  initial={{ opacity: 0, y: vq.yPath[0] }}
+                  animate={{ opacity: [0, 0.6, 0.6, 0], y: vq.yPath }}
                   transition={{
-                    duration: 6,
+                    duration: vq.duration,
                     times: [0, 0.1, 0.85, 1],
                     ease: "easeInOut",
                   }}
@@ -281,6 +345,7 @@ function ThinkingDots() {
 
 // ms between each character the typewriter drains from the queue
 const TYPEWRITER_INTERVAL_MS = 28;
+const INPUT_REVEAL_DELAY_MS = 400;
 
 function QuestionStage({
   question,
@@ -293,6 +358,7 @@ function QuestionStage({
   onPhrasedReady,
   ttsDisplayText,
   ttsDone,
+  preamble,
 }: {
   question: Question;
   index: number;
@@ -304,6 +370,7 @@ function QuestionStage({
   onPhrasedReady: (text: string) => void;
   ttsDisplayText: string;
   ttsDone: boolean;
+  preamble?: string;
 }) {
   const { input_type, options } = question;
   const [phrased, setPhrased] = useState<string | null>(null);
@@ -342,7 +409,7 @@ function QuestionStage({
       setPhrased(pendingTypewriterText);
       setThinking(false);
       setPendingTypewriterText(null);
-      revealInputs(250);
+      revealInputs(INPUT_REVEAL_DELAY_MS);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingTypewriterText, ttsDisplayText, ttsDone]);
@@ -367,7 +434,7 @@ function QuestionStage({
         typingActiveRef.current = false;
         setPhrased(displayedRef.current);
         setThinking(false);
-        revealInputs(250);
+        revealInputs(INPUT_REVEAL_DELAY_MS);
       } else {
         typingActiveRef.current = false;
       }
@@ -547,7 +614,7 @@ function QuestionStage({
     <div className="flex flex-col gap-6 px-12 py-14 max-w-lg w-full">
       {/* Progress */}
       <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
-        {index + 1} / {total}
+        {preamble ?? `${index + 1} / ${total}`}
       </p>
 
       {/* Prompt: phrase stream drives the visible typewriter immediately.
@@ -635,51 +702,51 @@ function QuestionStage({
 function FollowUpStage({
   prompt,
   inputType,
+  sessionId,
+  tone,
+  questionIntent,
   onAnswer,
+  onPhrasedReady,
+  ttsDisplayText,
+  ttsDone,
 }: {
   prompt: string;
   inputType: "voice" | "text";
+  sessionId: string | null;
+  tone: string;
+  questionIntent: string | null;
   onAnswer: (rawValue: unknown, transcript?: string) => void;
+  onPhrasedReady: (text: string) => void;
+  ttsDisplayText: string;
+  ttsDone: boolean;
 }) {
-  function handleVoice(v: { type: "voice"; value: string; audioBlob: Blob }) {
-    onAnswer({ type: "voice", value: v.value }, v.value);
-  }
-  function handleText(v: { type: "text"; value: string }) {
-    onAnswer(v);
-  }
-
   // Stub question satisfies component prop contracts
   const stubQuestion = {
-    id: "followup",
+    id: `followup-${prompt}`,
     form_id: "",
     position: -1,
     prompt,
-    intent: null,
+    intent: questionIntent,
     input_type: inputType,
     options: null,
     follow_up_enabled: false,
     required: false,
-  } as const;
+  } satisfies Question;
 
   return (
-    <div className="flex flex-col gap-6 px-12 py-14 max-w-lg w-full">
-      <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
-        One more thing…
-      </p>
-      <motion.h2
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" as const }}
-        className="text-2xl font-medium leading-snug"
-      >
-        {prompt}
-      </motion.h2>
-      {inputType === "voice" ? (
-        <VoiceInput question={stubQuestion} onSubmit={handleVoice} />
-      ) : (
-        <TextInput question={stubQuestion} onSubmit={handleText} />
-      )}
-    </div>
+    <QuestionStage
+      question={stubQuestion}
+      index={-1}
+      total={0}
+      sessionId={sessionId}
+      tone={tone}
+      formIntent={questionIntent}
+      onAnswer={onAnswer}
+      onPhrasedReady={onPhrasedReady}
+      ttsDisplayText={ttsDisplayText}
+      ttsDone={ttsDone}
+      preamble="One more thing…"
+    />
   );
 }
 
@@ -946,6 +1013,11 @@ export function RespondentFlow({
           if (follow_up) {
             pendingReflectionRef.current = reflection;
             setFollowUpPrompt(follow_up);
+            setPhrasedForTTS(null);
+            setIsSpeaking(false);
+            setTtsDisplayText("");
+            setTtsDone(false);
+            setAvatarMode("thinking");
             playTick();
             setStage("FOLLOWUP");
             return;
@@ -965,9 +1037,10 @@ export function RespondentFlow({
 
   async function handleFollowUpAnswer(rawValue: unknown, transcript?: string) {
     const currentQuestion = questions[questionIndex];
+    let followUpReflection: ReflectionResult | null = null;
     if (sessionId && currentQuestion) {
       try {
-        await fetchWithRetry(
+        const res = await fetchWithRetry(
           "/api/answers",
           {
             method: "POST",
@@ -982,12 +1055,28 @@ export function RespondentFlow({
           },
           1
         );
+        if (res.ok) {
+          const data = (await res.json()) as {
+            reflection?: ReflectionResult | null;
+            null_reason?: NullReflectionReason | null;
+            debug_info?: string | null;
+          };
+          followUpReflection = (data.reflection as ReflectionResult) ?? null;
+          if (followUpReflection?.type) {
+            reflectionHistoryRef.current = [
+              ...reflectionHistoryRef.current.slice(-5),
+              followUpReflection.type,
+            ];
+          }
+          pendingNullReasonRef.current = data.null_reason ?? null;
+          pendingNullDebugInfoRef.current = data.debug_info ?? null;
+        }
       } catch {
         toast.error("Connection hiccup, please try again");
       }
     }
     goToReflection(
-      pendingReflectionRef.current,
+      followUpReflection ?? pendingReflectionRef.current,
       pendingNullReasonRef.current,
       pendingNullDebugInfoRef.current
     );
@@ -1057,10 +1146,10 @@ export function RespondentFlow({
         </div>
 
         {/* TTS audio player — drives text reveal in QuestionStage via onDisplayedTextChange */}
-        {phrasedForTTS && stage === "QUESTION" && (
+        {phrasedForTTS && (stage === "QUESTION" || stage === "FOLLOWUP") && (
           <div className="relative z-10 pb-2 md:pb-8 flex justify-center">
             <TTSPlayer
-              key={`tts-${questionIndex}`}
+              key={`tts-${stage}-${questionIndex}-${phrasedForTTS}`}
               text={phrasedForTTS}
               tone={form.tone}
               muted={muted}
@@ -1117,7 +1206,13 @@ export function RespondentFlow({
                     ? "voice"
                     : "text"
                 }
+                sessionId={sessionId}
+                tone={form.tone}
+                questionIntent={questions[questionIndex]?.intent ?? null}
                 onAnswer={handleFollowUpAnswer}
+                onPhrasedReady={setPhrasedForTTS}
+                ttsDisplayText={ttsDisplayText}
+                ttsDone={ttsDone}
               />
             </motion.div>
           )}
