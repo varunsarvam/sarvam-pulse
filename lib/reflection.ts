@@ -203,7 +203,14 @@ export function pickReflectionWithDebug(
     const pct = total > 0 ? Math.round((below / total) * 100) : 50;
     const score = Math.abs(pct - 50) / 50;
     const direction = pct >= 50 ? "high" : "low";
-    const payload = { percentile: pct, value: val, bucket: valBucket, direction };
+    const payload = {
+      percentile: pct,
+      value: val,
+      bucket: valBucket,
+      direction,
+      distribution: { ...dist },
+      totalResponses: total,
+    };
 
     candidates.push({
       type: "comparison",
@@ -276,6 +283,7 @@ export function pickReflectionWithDebug(
         chosenPct: pct,
         ratio: ratioInTen(pct),
         totalResponses: total,
+        distribution: { ...dist },
       };
       candidates.push({
         type: "majority",
@@ -305,6 +313,7 @@ export function pickReflectionWithDebug(
           chosenPct: pct,
           ratio: ratioInTen(pct),
           totalResponses: total,
+          distribution: { ...dist },
         };
         candidates.push({
           type: "minority",

@@ -324,6 +324,29 @@ export async function POST(req: NextRequest) {
 
     const reflection = picked.reflection;
     if (reflection) {
+      if (reflection.type === "tribe") {
+        const clusterLabel = reflection.payload.clusterLabel;
+        const matchedCluster = preMutationAgg.clusters.find(
+          (c) => c.label === clusterLabel
+        );
+        const answerText = extractAnswerText(raw_value, transcript ?? null).toLowerCase();
+        const quotePool = [
+          ...(matchedCluster?.examples ?? []),
+          ...preMutationAgg.recent_quotes,
+        ];
+        reflection.payload.quotes =
+          quotePool
+            .filter((q): q is string => typeof q === "string" && q.trim().length > 10)
+            .map((q) => q.trim())
+            .filter((q) => {
+              const lower = q.toLowerCase();
+              return !answerText || (!answerText.startsWith(lower) && !lower.startsWith(answerText.slice(0, 80)));
+            })
+            .filter((q, index, arr) => arr.findIndex((other) => other.toLowerCase() === q.toLowerCase()) === index)
+            .slice(0, 3)
+            .map((q) => (q.length > 100 ? `${q.slice(0, 100)}...` : q)) ?? [];
+      }
+
       const generated = await generateReflectionCopy(
         reflection.type,
         reflection.payload,

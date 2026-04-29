@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
+import { ReflectionDistribution } from "@/components/reflection/ReflectionDistribution";
+import { ReflectionSlider } from "@/components/reflection/ReflectionSlider";
+import { ReflectionTribe } from "@/components/reflection/ReflectionTribe";
 import type { ReflectionType } from "@/lib/reflection";
+import type { InputType } from "@/lib/types";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +19,7 @@ interface ReflectionProps {
   };
   sessionId: string | null;
   questionId: string;
+  questionInputType?: InputType;
   onDone: () => void;
 }
 
@@ -286,6 +291,7 @@ export function Reflection({
   reflection,
   sessionId,
   questionId,
+  questionInputType,
   onDone,
 }: ReflectionProps) {
   const [reacted, setReacted] = useState<string | null>(null);
@@ -370,42 +376,71 @@ export function Reflection({
   }
 
   const { type, copy, payload } = reflection;
+  const quotes = Array.isArray(payload.quotes)
+    ? payload.quotes.filter((q): q is string => typeof q === "string")
+    : [];
+  const useTribeLayout = type === "tribe" && quotes.length > 0;
+  const useSliderLayout =
+    type === "comparison" &&
+    questionInputType === "emoji_slider" &&
+    typeof payload.distribution === "object" &&
+    payload.distribution !== null;
+  const useDistributionLayout =
+    (type === "majority" || type === "minority") &&
+    (questionInputType === "cards" || questionInputType === "this_or_that") &&
+    typeof payload.distribution === "object" &&
+    payload.distribution !== null;
 
   return (
     <>
       {/* Emotion wash — behind everything, full-screen */}
-      {type === "emotion" && <EmotionWash payload={payload} />}
+      {type === "emotion" &&
+        !useTribeLayout &&
+        !useSliderLayout &&
+        !useDistributionLayout && <EmotionWash payload={payload} />}
 
       <div
-        className="relative z-10 flex flex-col items-center justify-center gap-8 px-12 py-14 max-w-lg w-full mx-auto"
+        className={`relative z-10 flex w-full flex-col items-center justify-center gap-8 px-8 py-10 mx-auto ${
+          useSliderLayout || useDistributionLayout ? "max-w-4xl" : "max-w-lg"
+        }`}
         role={showContinue ? "button" : undefined}
         tabIndex={showContinue ? 0 : undefined}
         onClick={handleCardClick}
         onKeyDown={handleCardKeyDown}
       >
-        {/* Type-specific visual */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="w-full flex justify-center"
-        >
-          {type === "comparison" && <ComparisonVisual payload={payload} />}
-          {type === "majority" && <MajorityVisual payload={payload} />}
-          {type === "minority" && <MinorityVisual payload={payload} />}
-          {type === "tribe" && <TribeVisual payload={payload} />}
-          {/* emotion has no inline visual — it's the full-screen wash */}
-        </motion.div>
+        {useTribeLayout ? (
+          <ReflectionTribe copy={copy} quotes={quotes} />
+        ) : useSliderLayout ? (
+          <ReflectionSlider copy={copy} payload={payload} />
+        ) : useDistributionLayout ? (
+          <ReflectionDistribution copy={copy} payload={payload} />
+        ) : (
+          <>
+            {/* Type-specific visual */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="w-full flex justify-center"
+            >
+              {type === "comparison" && <ComparisonVisual payload={payload} />}
+              {type === "majority" && <MajorityVisual payload={payload} />}
+              {type === "minority" && <MinorityVisual payload={payload} />}
+              {type === "tribe" && <TribeVisual payload={payload} />}
+              {/* emotion has no inline visual — it's the full-screen wash */}
+            </motion.div>
 
-        {/* Copy headline */}
-        <motion.p
-          className="text-center text-lg font-medium leading-snug"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.25 }}
-        >
-          {copy}
-        </motion.p>
+            {/* Copy headline */}
+            <motion.p
+              className="text-center text-lg font-medium leading-snug"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.25 }}
+            >
+              {copy}
+            </motion.p>
+          </>
+        )}
 
         {reflection.source && (
           <p className="absolute bottom-3 right-4 text-xs uppercase text-muted-foreground/40">
@@ -423,7 +458,10 @@ export function Reflection({
           {REACTIONS.map(({ key, emoji }) => (
             <motion.button
               key={key}
-              onClick={() => handleReaction(key)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReaction(key);
+              }}
               disabled={reacted !== null}
               className="text-2xl p-2 rounded-full hover:bg-muted/40 transition-colors disabled:opacity-40"
               whileTap={{ scale: 1.3 }}

@@ -81,6 +81,10 @@ Fallback templates are kept in `lib/reflection.ts` and selected deterministicall
 from the session id + question position so the demo remains stable if the LLM
 copy call times out.
 
+Tribe reflections include up to three anonymous quote examples from the matched
+cluster and render as a structured "three voices" stack below the reflection
+headline when quotes are available.
+
 Debug mode can be enabled with `NEXT_PUBLIC_REFLECTION_DEBUG=true`, which shows
 `[LLM]` / `[FALLBACK]` on reflection cards and null-reason details on transition
 cards.

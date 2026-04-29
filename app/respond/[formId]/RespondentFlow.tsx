@@ -1129,6 +1129,7 @@ export function RespondentFlow({
                   reflection={reflectionData}
                   sessionId={sessionId}
                   questionId={questions[questionIndex]?.id ?? ""}
+                  questionInputType={questions[questionIndex]?.input_type}
                   onDone={advanceQuestion}
                 />
               ) : (
