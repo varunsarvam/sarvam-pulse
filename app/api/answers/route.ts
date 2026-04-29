@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { normalizeAnswer, type NormalizeResult } from "@/lib/llm";
-import { pickReflection } from "@/lib/reflection";
+import {
+  generateReflectionCopy,
+  pickReflectionWithDebug,
+  type ReflectionType,
+} from "@/lib/reflection";
 import type { InputType, Aggregation, Cluster } from "@/lib/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -15,7 +19,12 @@ function extractAnswerText(
   rawValue: Record<string, unknown>,
   transcript: string | null
 ): string {
-  return (transcript ?? (rawValue.value as string) ?? "").trim();
+  if (transcript?.trim()) return transcript.trim();
+  const value = rawValue.value;
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.join(" → ");
+  return "";
 }
 
 function defaultAggregation(questionId: string): Aggregation {
@@ -30,16 +39,49 @@ function defaultAggregation(questionId: string): Aggregation {
   };
 }
 
+function cloneAggregation(agg: Aggregation): Aggregation {
+  return {
+    question_id: agg.question_id,
+    total_responses: agg.total_responses,
+    distribution: { ...agg.distribution },
+    sentiment_avg: agg.sentiment_avg,
+    recent_quotes: [...agg.recent_quotes],
+    clusters: agg.clusters.map((c) => ({
+      label: c.label,
+      count: c.count,
+      examples: [...c.examples],
+    })),
+    updated_at: agg.updated_at,
+  };
+}
+
+function parseReflectionHistory(value: unknown): ReflectionType[] {
+  const valid = new Set<ReflectionType>([
+    "comparison",
+    "majority",
+    "minority",
+    "tribe",
+    "emotion",
+  ]);
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is ReflectionType =>
+      typeof item === "string" && valid.has(item as ReflectionType)
+    )
+    .slice(-5);
+}
+
 // ── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
-    const { session_id, question_id, raw_value, transcript } =
+    const { session_id, question_id, raw_value, transcript, reflection_history } =
       (await req.json()) as {
         session_id?: string;
         question_id?: string;
         raw_value?: Record<string, unknown>;
         transcript?: string | null;
+        reflection_history?: unknown;
       };
 
     if (!session_id || !question_id || raw_value === undefined) {
@@ -66,7 +108,7 @@ export async function POST(req: NextRequest) {
         .single(),
       supabase
         .from("questions")
-        .select("input_type, intent, options, position, form_id")
+        .select("input_type, intent, prompt, options, position, form_id")
         .eq("id", question_id)
         .single(),
       supabase
@@ -95,12 +137,14 @@ export async function POST(req: NextRequest) {
     const question = questionRes.data as {
       input_type: InputType;
       intent: string | null;
+      prompt: string;
       options: unknown;
       position: number;
       form_id: string;
     };
     const inputType = question.input_type;
     const isOpenEnded = inputType === "voice" || inputType === "text";
+    const reflectionHistory = parseReflectionHistory(reflection_history);
 
     // ── Phase 2: normalize (voice/text only, needs existing clusters) ─────────
 
@@ -122,9 +166,11 @@ export async function POST(req: NextRequest) {
 
     // ── Phase 3: compute updated aggregation ──────────────────────────────────
 
-    const agg: Aggregation = aggRes.data
+    const existingAgg: Aggregation = aggRes.data
       ? (aggRes.data as Aggregation)
       : defaultAggregation(question_id);
+    const preMutationAgg = cloneAggregation(existingAgg);
+    const agg = cloneAggregation(existingAgg);
 
     const oldTotal = agg.total_responses;
     agg.total_responses = oldTotal + 1;
@@ -213,7 +259,7 @@ export async function POST(req: NextRequest) {
 
     // ── Phase 4: persist aggregation + answer update + next question (parallel)
 
-    const writeOps: Promise<unknown>[] = [
+    const writeOps: PromiseLike<unknown>[] = [
       supabase.from("aggregations").upsert({
         question_id: agg.question_id,
         total_responses: agg.total_responses,
@@ -258,7 +304,7 @@ export async function POST(req: NextRequest) {
 
     // ── Phase 5: compute reflection ───────────────────────────────────────────
 
-    const reflection = pickReflection(
+    const picked = pickReflectionWithDebug(
       { input_type: inputType },
       {
         raw_value,
@@ -271,14 +317,35 @@ export async function POST(req: NextRequest) {
           : null,
         sentiment: normalizeResult?.sentiment ?? null,
       },
-      agg,
-      [] // session-level history tracked client-side; empty for now
+      preMutationAgg,
+      reflectionHistory,
+      { sessionId: session_id, questionPosition: question.position }
     );
+
+    const reflection = picked.reflection;
+    if (reflection) {
+      const generated = await generateReflectionCopy(
+        reflection.type,
+        reflection.payload,
+        {
+          questionPrompt: question.prompt,
+          answerText: extractAnswerText(raw_value, transcript ?? null),
+        }
+      );
+      if (generated && generated.length > 0 && generated.length < 200) {
+        reflection.copy = generated;
+        reflection.source = "llm";
+      } else {
+        reflection.source = "fallback";
+      }
+    }
 
     // ── Phase 6: return ───────────────────────────────────────────────────────
 
     return NextResponse.json({
       reflection,
+      null_reason: picked.null_reason ?? null,
+      debug_info: picked.debug_info ?? null,
       next_question_id: nextQRes?.data?.id ?? null,
     });
   } catch (e) {

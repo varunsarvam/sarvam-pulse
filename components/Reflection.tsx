@@ -11,6 +11,7 @@ interface ReflectionProps {
     type: ReflectionType;
     copy: string;
     payload: Record<string, unknown>;
+    source?: "llm" | "fallback";
   };
   sessionId: string | null;
   questionId: string;
@@ -324,6 +325,7 @@ export function Reflection({
   }
 
   const { type, copy, payload } = reflection;
+  const showDebug = process.env.NEXT_PUBLIC_REFLECTION_DEBUG === "true";
 
   return (
     <>
@@ -354,6 +356,12 @@ export function Reflection({
         >
           {copy}
         </motion.p>
+
+        {showDebug && reflection.source && (
+          <p className="self-end text-xs uppercase text-muted-foreground/40">
+            [{reflection.source === "llm" ? "LLM" : "FALLBACK"}]
+          </p>
+        )}
 
         {/* Reaction emoji row */}
         <motion.div

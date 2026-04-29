@@ -88,7 +88,7 @@ export function useAudioCapture(): AudioCapture {
     const actualRate = c.audioCtx.sampleRate;
     await c.audioCtx.close().catch(() => {});
 
-    let finalTranscript: string | null = lastTranscriptRef.current || null;
+    const finalTranscript: string | null = lastTranscriptRef.current || null;
 
     if (mountedRef.current) {
       setIsRecording(false);

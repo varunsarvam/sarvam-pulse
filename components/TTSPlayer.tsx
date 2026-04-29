@@ -59,6 +59,7 @@ export function TTSPlayer({
     let cancelled = false;
     const controller = new AbortController();
     let objectUrl: string | null = null;
+    const cleanupAudio = audioRef.current;
 
     async function loadAndPlay() {
       try {
@@ -80,12 +81,14 @@ export function TTSPlayer({
         // Blob-first path: collect all chunks then play as a single object URL.
         // Avoids MediaSource Extensions (unreliable on iOS Safari).
         const reader = res.body.getReader();
-        const chunks: Uint8Array[] = [];
+        const chunks: ArrayBuffer[] = [];
 
         while (true) {
           const { done, value } = await reader.read();
           if (done || cancelled) break;
-          if (value) chunks.push(value);
+          if (value) {
+            chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+          }
         }
 
         if (cancelled) return;
@@ -159,7 +162,7 @@ export function TTSPlayer({
       controller.abort();
       if (typewriterTimerRef.current) { clearTimeout(typewriterTimerRef.current); typewriterTimerRef.current = null; }
       if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-      const audio = audioRef.current;
+      const audio = cleanupAudio;
       if (audio) {
         audio.pause();
         audio.onplay = null;

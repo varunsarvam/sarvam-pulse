@@ -19,7 +19,7 @@ import { Reflection } from "@/components/Reflection";
 import { CompleteStage } from "@/components/CompleteStage";
 import { playTick, playWhoosh, setSoundMuted } from "@/lib/sounds";
 import type { Form, Question } from "@/lib/types";
-import type { ReflectionResult } from "@/lib/reflection";
+import type { NullReflectionReason, ReflectionResult } from "@/lib/reflection";
 
 // ─── Option parsers ───────────────────────────────────────────────────────────
 
@@ -683,9 +683,17 @@ function FollowUpStage({
   );
 }
 
-function NullReflectionCard() {
+function NullReflectionCard({
+  nullReason,
+  debugInfo,
+}: {
+  nullReason: NullReflectionReason | null;
+  debugInfo: string | null;
+}) {
+  const showDebug = process.env.NEXT_PUBLIC_REFLECTION_DEBUG === "true";
+
   return (
-    <div className="flex items-center justify-center h-32">
+    <div className="flex flex-col items-center justify-center h-32 gap-2">
       <motion.p
         className="text-muted-foreground text-sm"
         initial={{ opacity: 0 }}
@@ -694,6 +702,11 @@ function NullReflectionCard() {
       >
         Moving on…
       </motion.p>
+      {showDebug && (debugInfo || nullReason) && (
+        <p className="text-xs uppercase text-muted-foreground/40">
+          [{nullReason ?? "unknown"}{debugInfo ? `: ${debugInfo}` : ""}]
+        </p>
+      )}
     </div>
   );
 }
@@ -734,8 +747,13 @@ export function RespondentFlow({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [followUpPrompt, setFollowUpPrompt] = useState<string | null>(null);
   const [reflectionData, setReflectionData] = useState<ReflectionResult | null>(null);
+  const [nullReason, setNullReason] = useState<NullReflectionReason | null>(null);
+  const [nullDebugInfo, setNullDebugInfo] = useState<string | null>(null);
   const [avatarMode, setAvatarMode] = useState<AvatarMode>("idle");
   const pendingReflectionRef = useRef<ReflectionResult | null>(null);
+  const pendingNullReasonRef = useRef<NullReflectionReason | null>(null);
+  const pendingNullDebugInfoRef = useRef<string | null>(null);
+  const reflectionHistoryRef = useRef<ReflectionResult["type"][]>([]);
   const nullReflectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── TTS state ──
@@ -845,7 +863,11 @@ export function RespondentFlow({
     setTtsDisplayText("");
     setTtsDone(false);
     setReflectionData(null);
+    setNullReason(null);
+    setNullDebugInfo(null);
     pendingReflectionRef.current = null;
+    pendingNullReasonRef.current = null;
+    pendingNullDebugInfoRef.current = null;
     setAvatarMode("thinking");
     if (questionIndex + 1 < questions.length) {
       setQuestionIndex((i) => i + 1);
@@ -872,13 +894,26 @@ export function RespondentFlow({
               question_id: currentQuestion.id,
               raw_value: rawValue,
               transcript: transcript ?? null,
+              reflection_history: reflectionHistoryRef.current,
             }),
           },
           1
         );
         if (res.ok) {
-          const data = await res.json();
+          const data = (await res.json()) as {
+            reflection?: ReflectionResult | null;
+            null_reason?: NullReflectionReason | null;
+            debug_info?: string | null;
+          };
           reflection = (data.reflection as ReflectionResult) ?? null;
+          if (reflection?.type) {
+            reflectionHistoryRef.current = [
+              ...reflectionHistoryRef.current.slice(-5),
+              reflection.type,
+            ];
+          }
+          pendingNullReasonRef.current = data.null_reason ?? null;
+          pendingNullDebugInfoRef.current = data.debug_info ?? null;
         } else {
           toast.error("Connection hiccup, please try again");
         }
@@ -921,7 +956,11 @@ export function RespondentFlow({
       }
     }
 
-    goToReflection(reflection);
+    goToReflection(
+      reflection,
+      pendingNullReasonRef.current,
+      pendingNullDebugInfoRef.current
+    );
   }
 
   async function handleFollowUpAnswer(rawValue: unknown, transcript?: string) {
@@ -938,6 +977,7 @@ export function RespondentFlow({
               question_id: currentQuestion.id,
               raw_value: rawValue,
               transcript: transcript ?? null,
+              reflection_history: reflectionHistoryRef.current,
             }),
           },
           1
@@ -946,10 +986,18 @@ export function RespondentFlow({
         toast.error("Connection hiccup, please try again");
       }
     }
-    goToReflection(pendingReflectionRef.current);
+    goToReflection(
+      pendingReflectionRef.current,
+      pendingNullReasonRef.current,
+      pendingNullDebugInfoRef.current
+    );
   }
 
-  function goToReflection(reflection?: ReflectionResult | null) {
+  function goToReflection(
+    reflection?: ReflectionResult | null,
+    reason?: NullReflectionReason | null,
+    debugInfo?: string | null
+  ) {
     if (nullReflectionTimerRef.current) {
       clearTimeout(nullReflectionTimerRef.current);
       nullReflectionTimerRef.current = null;
@@ -961,6 +1009,8 @@ export function RespondentFlow({
     setTtsDone(false);
     setFollowUpPrompt(null);
     setReflectionData(ref);
+    setNullReason(ref ? null : reason ?? null);
+    setNullDebugInfo(ref ? null : debugInfo ?? null);
     setAvatarMode("idle");
     if (ref) playWhoosh();
     playTick();
@@ -1082,7 +1132,10 @@ export function RespondentFlow({
                   onDone={advanceQuestion}
                 />
               ) : (
-                <NullReflectionCard />
+                <NullReflectionCard
+                  nullReason={nullReason}
+                  debugInfo={nullDebugInfo}
+                />
               )}
             </motion.div>
           )}
