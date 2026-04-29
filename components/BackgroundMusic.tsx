@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-const DEFAULT_VOLUME = 0.15;
-const DUCKED_VOLUME = 0.04;
+const DEFAULT_VOLUME = 0.05;
+const DUCKED_VOLUME = 0.015;
 const MUTED_VOLUME = 0;
 const MUSIC_SRC = "/audio/bg-music.mp3";
 const MUSIC_SIZE_BYTES = 5.9 * 1024 * 1024;

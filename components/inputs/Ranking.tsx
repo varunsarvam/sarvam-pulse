@@ -26,11 +26,20 @@ interface RankingProps {
   question: Question;
   options: string[];
   onSubmit: (value: { type: "ranking"; value: string[] }) => void;
+  disabled?: boolean;
 }
 
 // ─── Sortable item ────────────────────────────────────────────────────────────
 
-function SortableItem({ id, rank }: { id: string; rank: number }) {
+function SortableItem({
+  id,
+  rank,
+  disabled,
+}: {
+  id: string;
+  rank: number;
+  disabled: boolean;
+}) {
   const {
     attributes,
     listeners,
@@ -38,7 +47,7 @@ function SortableItem({ id, rank }: { id: string; rank: number }) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id });
+  } = useSortable({ id, disabled });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -66,9 +75,10 @@ function SortableItem({ id, rank }: { id: string; rank: number }) {
 
       {/* Drag handle */}
       <button
-        className="cursor-grab touch-none text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing focus:outline-none"
+        className="cursor-grab touch-none text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing focus:outline-none disabled:cursor-not-allowed"
+        disabled={disabled}
         {...attributes}
-        {...listeners}
+        {...(disabled ? {} : listeners)}
         aria-label="Drag to reorder"
       >
         <GripVertical className="h-4 w-4" />
@@ -79,7 +89,7 @@ function SortableItem({ id, rank }: { id: string; rank: number }) {
 
 // ─── Ranking component ────────────────────────────────────────────────────────
 
-export function Ranking({ question, options, onSubmit }: RankingProps) {
+export function Ranking({ question, options, onSubmit, disabled = false }: RankingProps) {
   const [items, setItems] = useState<string[]>(options);
 
   void question;
@@ -92,6 +102,7 @@ export function Ranking({ question, options, onSubmit }: RankingProps) {
   );
 
   function handleDragEnd(event: DragEndEvent) {
+    if (disabled) return;
     const { active, over } = event;
     if (over && active.id !== over.id) {
       setItems((prev) => {
@@ -113,20 +124,20 @@ export function Ranking({ question, options, onSubmit }: RankingProps) {
       </p>
 
       <DndContext
-        sensors={sensors}
+        sensors={disabled ? [] : sensors}
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={items} strategy={verticalListSortingStrategy}>
           <div className="flex flex-col gap-2">
             {items.map((item, i) => (
-              <SortableItem key={item} id={item} rank={i + 1} />
+              <SortableItem key={item} id={item} rank={i + 1} disabled={disabled} />
             ))}
           </div>
         </SortableContext>
       </DndContext>
 
-      <Button onClick={submit} className="w-full mt-2">
+      <Button onClick={submit} className="w-full mt-2" disabled={disabled}>
         Lock in my ranking
       </Button>
     </div>

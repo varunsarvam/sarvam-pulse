@@ -8,9 +8,10 @@ interface ThisOrThatProps {
   question: Question;
   options: string[];
   onSubmit: (value: { type: "this_or_that"; value: string }) => void;
+  disabled?: boolean;
 }
 
-export function ThisOrThat({ question, options, onSubmit }: ThisOrThatProps) {
+export function ThisOrThat({ question, options, onSubmit, disabled = false }: ThisOrThatProps) {
   const [hovered, setHovered] = useState<0 | 1 | null>(null);
   const [selected, setSelected] = useState<0 | 1 | null>(null);
   const [a, b] = options;
@@ -18,7 +19,7 @@ export function ThisOrThat({ question, options, onSubmit }: ThisOrThatProps) {
   void question;
 
   function pick(index: 0 | 1) {
-    if (selected !== null) return;
+    if (disabled || selected !== null) return;
     setSelected(index);
     setTimeout(() => onSubmit({ type: "this_or_that", value: options[index] }), 300);
   }
@@ -40,7 +41,7 @@ export function ThisOrThat({ question, options, onSubmit }: ThisOrThatProps) {
         onHover={() => setHovered(0)}
         onLeave={() => setHovered(null)}
         onPick={() => pick(0)}
-        disabled={selected !== null}
+        disabled={disabled || selected !== null}
       />
 
       {/* "or" divider */}
@@ -62,7 +63,7 @@ export function ThisOrThat({ question, options, onSubmit }: ThisOrThatProps) {
         onHover={() => setHovered(1)}
         onLeave={() => setHovered(null)}
         onPick={() => pick(1)}
-        disabled={selected !== null}
+        disabled={disabled || selected !== null}
       />
     </div>
   );

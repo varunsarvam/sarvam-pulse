@@ -15,6 +15,7 @@ const BUCKET_EMOJI: Record<(typeof BUCKETS)[number], string> = {
 interface ReflectionSliderProps {
   copy: string;
   payload: Record<string, unknown>;
+  hideHeadline?: boolean;
 }
 
 interface Particle {
@@ -104,7 +105,7 @@ function makeParticles(distribution: Record<string, number>): Particle[] {
   return particles.slice(0, 40);
 }
 
-export function ReflectionSlider({ copy, payload }: ReflectionSliderProps) {
+export function ReflectionSlider({ copy, payload, hideHeadline = false }: ReflectionSliderProps) {
   const distribution = asDistribution(payload.distribution);
   const particles = makeParticles(distribution);
   const value = typeof payload.value === "number" ? payload.value : 50;
@@ -112,14 +113,16 @@ export function ReflectionSlider({ copy, payload }: ReflectionSliderProps) {
 
   return (
     <div className="relative min-h-[460px] w-full overflow-hidden">
-      <motion.h2
-        className="absolute left-1/2 top-[28%] z-20 max-w-md -translate-x-1/2 text-center text-2xl font-semibold leading-snug tracking-tight"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-      >
-        {copy}
-      </motion.h2>
+      {!hideHeadline && (
+        <motion.h2
+          className="absolute left-1/2 top-[28%] z-20 max-w-md -translate-x-1/2 text-center text-2xl font-semibold leading-snug tracking-tight"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        >
+          {copy}
+        </motion.h2>
+      )}
 
       <div className="pointer-events-none absolute inset-0 z-0">
         {particles.map((particle) => (

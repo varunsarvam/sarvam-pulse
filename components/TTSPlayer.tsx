@@ -50,7 +50,7 @@ export function TTSPlayer({
   // Sync muted state without re-fetching audio
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume = muted ? 0 : 1;
+      audioRef.current.volume = muted ? 0 : 0.6;
     }
   }, [muted]);
 
@@ -108,7 +108,7 @@ export function TTSPlayer({
           return;
         }
 
-        audio.volume = muted ? 0 : 1;
+        audio.volume = muted ? 0 : 0.6;
         audio.src = preloadedAudioUrl ?? objectUrl ?? "";
 
         audio.onplay = () => {

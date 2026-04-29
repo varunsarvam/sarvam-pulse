@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 interface ReflectionTribeProps {
   copy: string;
   quotes: string[];
+  hideHeadline?: boolean;
 }
 
 function truncateQuote(quote: string): string {
@@ -12,21 +13,23 @@ function truncateQuote(quote: string): string {
   return clean.length > 100 ? `${clean.slice(0, 100)}...` : clean;
 }
 
-export function ReflectionTribe({ copy, quotes }: ReflectionTribeProps) {
+export function ReflectionTribe({ copy, quotes, hideHeadline = false }: ReflectionTribeProps) {
   const visibleQuotes = quotes.slice(0, 3);
 
   return (
     <div className="flex w-full flex-col items-center">
-      <motion.h2
-        className="max-w-md text-center text-2xl font-medium leading-snug text-foreground"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-      >
-        {copy}
-      </motion.h2>
+      {!hideHeadline && (
+        <motion.h2
+          className="max-w-md text-center text-2xl font-medium leading-snug text-foreground"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        >
+          {copy}
+        </motion.h2>
+      )}
 
-      <div className="mt-6 flex w-full max-w-md flex-col gap-3">
+      <div className={`${hideHeadline ? "" : "mt-6"} flex w-full max-w-md flex-col gap-3`}>
         {visibleQuotes.map((quote, index) => (
           <motion.div
             key={`${index}-${quote}`}

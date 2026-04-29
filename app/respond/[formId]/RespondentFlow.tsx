@@ -230,105 +230,91 @@ function EntryScreen({
     await onStart().catch(() => setStarting(false));
   }
 
-  const tone = form.tone ?? "calm";
-  const g = ENTRY_GRADIENT[tone] ?? ENTRY_GRADIENT.calm;
-
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-      {/* Tone-based shifting gradient background */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `linear-gradient(135deg, ${g.from} 0%, transparent 50%, ${g.to} 100%)`,
-          backgroundSize: "200% 200%",
-        }}
-        animate={{ backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"] }}
-        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
-      />
-
-      {/* Content */}
-      <div className="relative z-10 flex flex-col gap-7 px-12 py-16 max-w-lg w-full">
-        {/* Live badges */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            {count > 0 ? `${count} people responded` : "Live"}
-          </span>
-          {reactionCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400 ring-1 ring-amber-500/20">
-              {reactionCount} reactions
+    <div className="relative flex h-full w-full flex-col gap-6 p-5 md:flex-row md:p-8">
+      <div className="flex w-full items-center justify-center md:w-[45%]">
+        <div className="relative z-10 flex w-full max-w-xl flex-col gap-7 rounded-3xl bg-white p-8 text-black shadow-2xl md:p-12">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-500 ring-1 ring-emerald-500/20">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {count > 0 ? `${count} people responded` : "Live"}
             </span>
-          )}
-          <span className="text-xs text-muted-foreground">· ~3 min</span>
-        </div>
+            {reactionCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-500 ring-1 ring-amber-500/20">
+                {reactionCount} reactions
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">· ~3 min</span>
+          </div>
 
-        {/* Title */}
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight leading-tight">
+          <div className="relative min-h-[150px] overflow-hidden">
+            <AnimatePresence>
+              {visibleQuotes.length > 0 ? (
+                visibleQuotes.map((vq) => (
+                  <motion.p
+                    key={vq.id}
+                    className="absolute text-sm text-muted-foreground/50 italic leading-relaxed"
+                    style={{
+                      left: `${vq.xOffset}px`,
+                      top: `${vq.yBase}px`,
+                      fontSize: `${vq.fontScale}em`,
+                    }}
+                    initial={{ opacity: 0, y: vq.yPath[0] }}
+                    animate={{ opacity: [0, 0.75, 0.75, 0], y: vq.yPath }}
+                    transition={{
+                      duration: vq.duration,
+                      times: [0, 0.1, 0.85, 1],
+                      ease: "easeInOut",
+                    }}
+                  >
+                    &ldquo;{vq.text}&rdquo;
+                  </motion.p>
+                ))
+              ) : (
+                <motion.p
+                  key="placeholder"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-sm text-muted-foreground/60 italic"
+                >
+                  Be among the first to respond.
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <motion.div
+            className="w-fit"
+            animate={{ scale: [1, 1.04, 1] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <Button
+              size="lg"
+              className="text-base px-8"
+              onClick={handleStart}
+              disabled={starting}
+            >
+              {starting ? "Starting…" : "Let's start →"}
+            </Button>
+          </motion.div>
+
+          <p className="text-xs text-muted-foreground">
+            {questions.length} question{questions.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
+        <div>
+          <h1 className="font-display max-w-2xl text-5xl leading-tight tracking-tight text-white md:text-6xl">
             {form.title}
           </h1>
           {form.intent && (
-            <p className="text-base text-muted-foreground">{form.intent}</p>
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-white/75">
+              {form.intent}
+            </p>
           )}
         </div>
-
-        {/* Floating quotes */}
-        <div className="relative min-h-[150px] overflow-hidden">
-          <AnimatePresence>
-            {visibleQuotes.length > 0 ? (
-              visibleQuotes.map((vq) => (
-                <motion.p
-                  key={vq.id}
-                  className="absolute text-sm text-muted-foreground/40 italic leading-relaxed"
-                  style={{
-                    left: `${vq.xOffset}px`,
-                    top: `${vq.yBase}px`,
-                    fontSize: `${vq.fontScale}em`,
-                  }}
-                  initial={{ opacity: 0, y: vq.yPath[0] }}
-                  animate={{ opacity: [0, 0.6, 0.6, 0], y: vq.yPath }}
-                  transition={{
-                    duration: vq.duration,
-                    times: [0, 0.1, 0.85, 1],
-                    ease: "easeInOut",
-                  }}
-                >
-                  &ldquo;{vq.text}&rdquo;
-                </motion.p>
-              ))
-            ) : (
-              <motion.p
-                key="placeholder"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-sm text-muted-foreground/50 italic"
-              >
-                Be among the first to respond.
-              </motion.p>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* CTA with breathing animation */}
-        <motion.div
-          className="w-fit"
-          animate={{ scale: [1, 1.04, 1] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <Button
-            size="lg"
-            className="text-base px-8"
-            onClick={handleStart}
-            disabled={starting}
-          >
-            {starting ? "Starting…" : "Let's start →"}
-          </Button>
-        </motion.div>
-
-        {/* Question count */}
-        <p className="text-xs text-muted-foreground">
-          {questions.length} question{questions.length !== 1 ? "s" : ""}
-        </p>
       </div>
 
       {/* Reaction pops overlay */}
@@ -391,21 +377,89 @@ function SetupScreen({
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-      <motion.div
-        className="absolute inset-0 pointer-events-none"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        style={{
-          background:
-            "radial-gradient(circle at 30% 20%, rgba(139,92,246,0.12), transparent 34%), radial-gradient(circle at 80% 75%, rgba(59,130,246,0.10), transparent 30%)",
-        }}
-      />
+    <div className="relative flex h-full w-full flex-col gap-6 p-5 md:flex-row md:p-8">
+      <div className="flex w-full items-center justify-center md:w-[45%]">
+        <div className="relative z-10 flex w-full max-w-xl flex-col gap-7 rounded-3xl bg-white p-8 text-black shadow-2xl md:p-12">
+          <motion.div
+            className="grid grid-cols-3 gap-2 max-w-md"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.45 }}
+          >
+            {["Speak freely", "See the room", "Leave with a signal"].map((text) => (
+              <div
+                key={text}
+                className="rounded-2xl border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-3 text-center text-[11px] leading-tight text-muted-foreground/80"
+              >
+                {text}
+              </div>
+            ))}
+          </motion.div>
 
-      <div className="relative z-10 flex flex-col gap-7 px-10 py-14 max-w-xl w-full">
+          <motion.div
+            className="w-full max-w-sm"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.18, duration: 0.5, ease: "easeOut" }}
+          >
+            <input
+              ref={inputRef}
+              value={name}
+              onChange={(e) => onNameChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="What should we call you?"
+              className="w-full rounded-2xl border border-foreground/[0.08] bg-background/70 px-5 py-4 text-lg text-foreground placeholder:text-muted-foreground/45 shadow-[0_12px_40px_rgba(0,0,0,0.10)] outline-none backdrop-blur transition-colors focus:border-foreground/30"
+              maxLength={30}
+            />
+            {nameError && (
+              <p className="mt-2 text-xs text-muted-foreground/70">
+                {nameError}
+              </p>
+            )}
+          </motion.div>
+
+          <motion.div
+            className="space-y-3 max-w-md"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.26, duration: 0.45 }}
+          >
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.08]">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-violet-300 via-foreground/80 to-blue-300"
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.round(progress * 100)}%` }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground/70">
+              {hasError
+                ? "A few things are still tuning themselves. You can begin; Pulse will catch up gracefully."
+                : "Preparing the voice, pacing the questions, opening the signal."}
+            </p>
+          </motion.div>
+
+          <motion.div
+            className="w-fit"
+            animate={canContinue ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+            transition={{ duration: 2.2, repeat: canContinue ? Infinity : 0, ease: "easeInOut" }}
+          >
+            <Button
+              size="lg"
+              className="text-base px-8"
+              onClick={onContinue}
+              disabled={!canContinue}
+            >
+              Begin the conversation →
+            </Button>
+          </motion.div>
+        </div>
+      </div>
+
+      <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
         <div className="space-y-4">
           <motion.p
-            className="text-xs font-medium tracking-[0.24em] uppercase text-muted-foreground"
+            className="text-xs font-medium tracking-[0.24em] uppercase text-white/70"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
@@ -413,7 +467,7 @@ function SetupScreen({
             The room is getting ready
           </motion.p>
           <motion.h1
-            className="text-4xl font-bold tracking-tight leading-tight"
+            className="font-display max-w-2xl text-5xl leading-tight tracking-tight text-white md:text-6xl"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.08, duration: 0.5, ease: "easeOut" }}
@@ -421,7 +475,7 @@ function SetupScreen({
             A voice will meet you here.
           </motion.h1>
           <motion.p
-            className="text-base leading-relaxed text-muted-foreground max-w-md"
+            className="max-w-xl text-base leading-relaxed text-white/75"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.16, duration: 0.5, ease: "easeOut" }}
@@ -430,80 +484,6 @@ function SetupScreen({
             invisible patterns forming around your responses.
           </motion.p>
         </div>
-
-        <motion.div
-          className="grid grid-cols-3 gap-2 max-w-md"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.24, duration: 0.45 }}
-        >
-          {["Speak freely", "See the room", "Leave with a signal"].map((text) => (
-            <div
-              key={text}
-              className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.03] px-3 py-3 text-center text-[11px] leading-tight text-muted-foreground/80"
-            >
-              {text}
-            </div>
-          ))}
-        </motion.div>
-
-        <motion.div
-          className="w-full max-w-sm"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.32, duration: 0.5, ease: "easeOut" }}
-        >
-          <input
-            ref={inputRef}
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="What should we call you?"
-            className="w-full rounded-2xl border border-foreground/[0.08] bg-background/70 px-5 py-4 text-lg text-foreground placeholder:text-muted-foreground/45 shadow-[0_12px_40px_rgba(0,0,0,0.10)] outline-none backdrop-blur transition-colors focus:border-foreground/30"
-            maxLength={30}
-          />
-          {nameError && (
-            <p className="mt-2 text-xs text-muted-foreground/70">
-              {nameError}
-            </p>
-          )}
-        </motion.div>
-
-        <motion.div
-          className="space-y-3 max-w-md"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.45 }}
-        >
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.08]">
-            <motion.div
-              className="h-full rounded-full bg-gradient-to-r from-violet-300 via-foreground/80 to-blue-300"
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.round(progress * 100)}%` }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground/70">
-            {hasError
-              ? "A few things are still tuning themselves. You can begin; Pulse will catch up gracefully."
-              : "Preparing the voice, pacing the questions, opening the signal."}
-          </p>
-        </motion.div>
-
-        <motion.div
-          className="w-fit"
-          animate={canContinue ? { scale: [1, 1.04, 1] } : { scale: 1 }}
-          transition={{ duration: 2.2, repeat: canContinue ? Infinity : 0, ease: "easeInOut" }}
-        >
-          <Button
-            size="lg"
-            className="text-base px-8"
-            onClick={onContinue}
-            disabled={!canContinue}
-          >
-            Begin the conversation →
-          </Button>
-        </motion.div>
       </div>
     </div>
   );
@@ -529,6 +509,7 @@ function QuestionStage({
   preamble,
   preloaded,
   respondentName,
+  splitLayout = false,
 }: {
   question: Question;
   index: number;
@@ -543,6 +524,7 @@ function QuestionStage({
   preamble?: string;
   preloaded?: PreloadItem | null;
   respondentName?: string | null;
+  splitLayout?: boolean;
 }) {
   const { input_type, options } = question;
   const [phrased, setPhrased] = useState<string | null>(null);
@@ -794,41 +776,123 @@ function QuestionStage({
     onAnswer(v);
   }
 
+  const inputDisabled = !ttsDone;
+  const inputArea = (
+    <div
+      className={`transition-opacity duration-200 ${
+        inputDisabled ? "opacity-50" : "opacity-100"
+      }`}
+    >
+      {input_type === "voice" && (
+        <VoiceInput
+          question={question}
+          onSubmit={handleVoice}
+          disabled={inputDisabled}
+        />
+      )}
+      {input_type === "text" && (
+        <TextInput
+          question={question}
+          onSubmit={handleText}
+          disabled={inputDisabled}
+        />
+      )}
+      {input_type === "emoji_slider" && (
+        <EmojiSlider
+          question={question}
+          onSubmit={handleSlider}
+          disabled={inputDisabled}
+        />
+      )}
+      {input_type === "cards" && (
+        <Cards
+          question={question}
+          options={parseStringOptions(options)}
+          onSubmit={handleCards}
+          disabled={inputDisabled}
+        />
+      )}
+      {input_type === "ranking" && (
+        <Ranking
+          question={question}
+          options={parseStringOptions(options)}
+          onSubmit={handleRanking}
+          disabled={inputDisabled}
+        />
+      )}
+      {input_type === "this_or_that" && (
+        <ThisOrThat
+          question={question}
+          options={parseStringOptions(options)}
+          onSubmit={handleThisOrThat}
+          disabled={inputDisabled}
+        />
+      )}
+      {input_type === "visual_select" && (
+        <VisualSelect
+          question={question}
+          options={parseVisualOptions(options)}
+          onSubmit={handleVisual}
+          disabled={inputDisabled}
+        />
+      )}
+    </div>
+  );
+
+  const promptArea = (
+    <AnimatePresence mode="popLayout">
+      {thinking ? (
+        <motion.div
+          key="thinking"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className={splitLayout ? "text-white" : undefined}
+        >
+          <ThinkingDots />
+        </motion.div>
+      ) : (
+        <motion.h2
+          key="prompt"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: "easeOut" as const }}
+          className={
+            splitLayout
+              ? "font-display text-4xl leading-tight tracking-tight text-white md:text-5xl"
+              : "text-2xl font-medium leading-snug"
+          }
+        >
+          {phrased ?? question.prompt}
+        </motion.h2>
+      )}
+    </AnimatePresence>
+  );
+
+  if (splitLayout) {
+    return (
+      <div className="flex min-h-screen w-full flex-col gap-6 bg-[url('/bg-blue.png')] bg-cover bg-center bg-no-repeat p-5 md:flex-row md:p-8">
+        <div className="flex w-full items-center justify-center md:w-[45%]">
+          <div className="w-full max-w-xl rounded-3xl bg-white p-8 text-black shadow-2xl md:p-12">
+            {inputArea}
+          </div>
+        </div>
+        <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
+          <div className="max-w-2xl text-left">{promptArea}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 px-12 py-14 max-w-lg w-full">
-      {/* Progress */}
       <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
         {preamble ?? `${index + 1} / ${total}`}
       </p>
 
-      {/* Prompt: phrase stream drives the visible typewriter immediately.
-          TTS starts once the final phrasing is known, but text no longer waits
-          for the audio blob to finish downloading before it appears. */}
-      <AnimatePresence mode="popLayout">
-        {thinking ? (
-          <motion.div
-            key="thinking"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            <ThinkingDots />
-          </motion.div>
-        ) : (
-          <motion.h2
-            key="prompt"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: "easeOut" as const }}
-            className="text-2xl font-medium leading-snug"
-          >
-            {phrased ?? question.prompt}
-          </motion.h2>
-        )}
-      </AnimatePresence>
+      {promptArea}
 
-      {/* Input — revealed only after the question has fully streamed in */}
       <AnimatePresence>
         {inputReady && (
           <motion.div
@@ -837,43 +901,7 @@ function QuestionStage({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" as const }}
           >
-            {input_type === "voice" && (
-              <VoiceInput question={question} onSubmit={handleVoice} />
-            )}
-            {input_type === "text" && (
-              <TextInput question={question} onSubmit={handleText} />
-            )}
-            {input_type === "emoji_slider" && (
-              <EmojiSlider question={question} onSubmit={handleSlider} />
-            )}
-            {input_type === "cards" && (
-              <Cards
-                question={question}
-                options={parseStringOptions(options)}
-                onSubmit={handleCards}
-              />
-            )}
-            {input_type === "ranking" && (
-              <Ranking
-                question={question}
-                options={parseStringOptions(options)}
-                onSubmit={handleRanking}
-              />
-            )}
-            {input_type === "this_or_that" && (
-              <ThisOrThat
-                question={question}
-                options={parseStringOptions(options)}
-                onSubmit={handleThisOrThat}
-              />
-            )}
-            {input_type === "visual_select" && (
-              <VisualSelect
-                question={question}
-                options={parseVisualOptions(options)}
-                onSubmit={handleVisual}
-              />
-            )}
+            {inputArea}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1435,7 +1463,7 @@ export function RespondentFlow({
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen overflow-hidden">
+    <div className="h-screen overflow-hidden bg-[url('/bg-blue.png')] bg-cover bg-center bg-no-repeat">
       {/* ── Mute toggle — fixed overlay, always accessible ── */}
       <button
         onClick={toggleMute}
@@ -1456,9 +1484,26 @@ export function RespondentFlow({
         muted={muted}
       />
 
+      {phrasedForTTS && (stage === "QUESTION" || stage === "FOLLOWUP") && (
+        <div className="fixed bottom-4 left-4 z-50">
+          <TTSPlayer
+            key={`tts-${stage}-${questionIndex}-${phrasedForTTS}`}
+            text={phrasedForTTS}
+            tone={form.tone}
+            muted={muted}
+            preloadedAudioUrl={preloadedAudioUrlForTTS}
+            onSpeakingChange={handleSpeakingChange}
+            onDisplayedTextChange={(text, isDone) => {
+              setTtsDisplayText(text);
+              if (isDone) setTtsDone(true);
+            }}
+          />
+        </div>
+      )}
+
       {/* ── Left: AI presence (40% desktop, top banner mobile) ── */}
       <div
-        className="relative w-full h-28 md:h-auto md:w-[40%] flex flex-col items-center justify-center overflow-hidden shrink-0"
+        className="hidden"
         style={{ background: leftBg }}
       >
         {/* Slow-breathing tint overlay */}
@@ -1469,30 +1514,25 @@ export function RespondentFlow({
           style={{ background: leftBg }}
         />
         <div className="relative flex-1 flex items-center justify-center w-full md:scale-100 scale-[0.45]">
-          <AIPresence tone={form.tone} mode={avatarMode} speaking={isSpeaking} />
+          {stage === "QUESTION" ? (
+            <>
+              {/* TODO: replace with paper shader avatar synced to TTS */}
+              {/* <AIPresence tone={form.tone} mode={avatarMode} speaking={isSpeaking} /> */}
+            </>
+          ) : (
+            <AIPresence tone={form.tone} mode={avatarMode} speaking={isSpeaking} />
+          )}
         </div>
-
-        {/* TTS audio player — drives text reveal in QuestionStage via onDisplayedTextChange */}
-        {phrasedForTTS && (stage === "QUESTION" || stage === "FOLLOWUP") && (
-          <div className="relative z-10 pb-2 md:pb-8 flex justify-center">
-            <TTSPlayer
-              key={`tts-${stage}-${questionIndex}-${phrasedForTTS}`}
-              text={phrasedForTTS}
-              tone={form.tone}
-              muted={muted}
-              preloadedAudioUrl={preloadedAudioUrlForTTS}
-              onSpeakingChange={handleSpeakingChange}
-              onDisplayedTextChange={(text, isDone) => {
-                setTtsDisplayText(text);
-                if (isDone) setTtsDone(true);
-              }}
-            />
-          </div>
-        )}
       </div>
 
       {/* ── Right: human expression (60% desktop, rest mobile) ── */}
-      <div className="relative flex-1 md:w-[60%] bg-background flex items-center justify-center overflow-hidden">
+      <div
+        className={
+          stage === "QUESTION"
+            ? "relative flex h-full w-full flex-1 items-stretch justify-stretch overflow-hidden"
+            : "relative flex h-full w-full flex-1 items-center justify-center overflow-hidden"
+        }
+      >
         <AnimatePresence mode="wait">
           {stage === "ENTRY" && (
             <motion.div key="entry" {...fadeUp} className="w-full h-full">
@@ -1526,7 +1566,7 @@ export function RespondentFlow({
             <motion.div
               key={`question-${questionIndex}`}
               {...fadeUp}
-              className="w-full"
+              className="w-full h-full"
             >
               <QuestionStage
                 question={questions[questionIndex]}
@@ -1541,6 +1581,7 @@ export function RespondentFlow({
                 ttsDone={ttsDone}
                 preloaded={preloadCacheRef.current.get(questions[questionIndex].id) ?? null}
                 respondentName={respondentNameSaved}
+                splitLayout
               />
             </motion.div>
           )}
@@ -1574,6 +1615,7 @@ export function RespondentFlow({
                   sessionId={sessionId}
                   questionId={questions[questionIndex]?.id ?? ""}
                   questionInputType={questions[questionIndex]?.input_type}
+                  splitLayout
                   onDone={advanceQuestion}
                 />
               ) : (
@@ -1587,7 +1629,27 @@ export function RespondentFlow({
 
           {stage === "COMPLETE" && (
             <motion.div key="complete" {...fadeUp} className="w-full h-full">
-              <CompleteStage form={form} sessionId={sessionId} />
+              <div className="flex h-full w-full flex-col gap-6 p-5 md:flex-row md:p-8">
+                <div className="flex w-full items-center justify-center md:w-[45%]">
+                  <div className="h-full w-full max-w-xl overflow-hidden rounded-3xl bg-white text-black shadow-2xl">
+                    <CompleteStage form={form} sessionId={sessionId} />
+                  </div>
+                </div>
+                <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/70">
+                      Complete
+                    </p>
+                    <h1 className="font-display mt-4 max-w-2xl text-5xl leading-tight tracking-tight text-white md:text-6xl">
+                      Your Pulse is ready.
+                    </h1>
+                    <p className="mt-5 max-w-xl text-base leading-relaxed text-white/75">
+                      A final signal from everything you shared, shaped into a
+                      card you can keep or pass along.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

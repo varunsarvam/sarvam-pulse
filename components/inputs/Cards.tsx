@@ -8,16 +8,17 @@ interface CardsProps {
   question: Question;
   options: string[];
   onSubmit: (value: { type: "cards"; value: string }) => void;
+  disabled?: boolean;
 }
 
-export function Cards({ question, options, onSubmit }: CardsProps) {
+export function Cards({ question, options, onSubmit, disabled = false }: CardsProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const visible = options.slice(0, 4);
 
   void question;
 
   function pick(opt: string) {
-    if (selected !== null) return;
+    if (disabled || selected !== null) return;
     setSelected(opt);
     setTimeout(() => onSubmit({ type: "cards", value: opt }), 400);
   }
@@ -33,7 +34,7 @@ export function Cards({ question, options, onSubmit }: CardsProps) {
             key={opt}
             layoutId={`card-${opt}`}
             onClick={() => pick(opt)}
-            disabled={selected !== null}
+            disabled={disabled || selected !== null}
             animate={
               isSelected
                 ? { scale: 1.03, opacity: 1 }
@@ -41,8 +42,8 @@ export function Cards({ question, options, onSubmit }: CardsProps) {
                 ? { scale: 0.97, opacity: 0.35 }
                 : { scale: 1, opacity: 1 }
             }
-            whileHover={selected === null ? { scale: 1.015 } : {}}
-            whileTap={selected === null ? { scale: 0.98 } : {}}
+            whileHover={!disabled && selected === null ? { scale: 1.015 } : {}}
+            whileTap={!disabled && selected === null ? { scale: 0.98 } : {}}
             transition={{ type: "spring", stiffness: 340, damping: 26 }}
             className="relative w-full rounded-xl border border-border bg-card px-5 py-4 text-left text-base font-medium text-card-foreground shadow-sm cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >

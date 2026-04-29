@@ -8,6 +8,7 @@ import type { Question } from "@/lib/types";
 interface EmojiSliderProps {
   question: Question;
   onSubmit: (value: { type: "emoji_slider"; value: number }) => void;
+  disabled?: boolean;
 }
 
 // ─── Breakpoints ──────────────────────────────────────────────────────────────
@@ -32,7 +33,7 @@ function emojiScale(value: number): number {
   return 1 + distance * 0.22;
 }
 
-export function EmojiSlider({ question, onSubmit }: EmojiSliderProps) {
+export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSliderProps) {
   const [value, setValue] = useState(50);
   const bp = getBreakpoint(value);
   const scale = emojiScale(value);
@@ -40,10 +41,12 @@ export function EmojiSlider({ question, onSubmit }: EmojiSliderProps) {
   void question;
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (disabled) return;
     setValue(Number(e.target.value));
   }
 
   function submit() {
+    if (disabled) return;
     onSubmit({ type: "emoji_slider", value });
   }
 
@@ -62,7 +65,7 @@ export function EmojiSlider({ question, onSubmit }: EmojiSliderProps) {
       </motion.span>
 
       {/* Slider */}
-      <div className="w-full space-y-3">
+      <div className={`w-full space-y-3 ${disabled ? "pointer-events-none" : ""}`}>
         <div className="relative h-3 rounded-full overflow-hidden"
           style={{ background: "linear-gradient(to right, #ef4444, #eab308, #22c55e)" }}
         >
@@ -79,6 +82,7 @@ export function EmojiSlider({ question, onSubmit }: EmojiSliderProps) {
           max={100}
           value={value}
           onChange={handleChange}
+          disabled={disabled}
           className="w-full appearance-none bg-transparent cursor-pointer
             [&::-webkit-slider-thumb]:appearance-none
             [&::-webkit-slider-thumb]:h-5
@@ -115,7 +119,7 @@ export function EmojiSlider({ question, onSubmit }: EmojiSliderProps) {
       </motion.p>
 
       {/* Confirm */}
-      <Button onClick={submit} className="px-8">
+      <Button onClick={submit} className="px-8" disabled={disabled}>
         Confirm
       </Button>
     </div>

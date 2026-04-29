@@ -13,9 +13,10 @@ interface VisualSelectProps {
   question: Question;
   options: VisualOption[];
   onSubmit: (value: { type: "visual_select"; value: string }) => void;
+  disabled?: boolean;
 }
 
-export function VisualSelect({ question, options, onSubmit }: VisualSelectProps) {
+export function VisualSelect({ question, options, onSubmit, disabled = false }: VisualSelectProps) {
   const [selected, setSelected] = useState<string | null>(null);
 
   void question;
@@ -24,7 +25,7 @@ export function VisualSelect({ question, options, onSubmit }: VisualSelectProps)
   const cols = options.length >= 3 ? "grid-cols-3" : "grid-cols-2";
 
   function pick(label: string) {
-    if (selected !== null) return;
+    if (disabled || selected !== null) return;
     setSelected(label);
     setTimeout(() => onSubmit({ type: "visual_select", value: label }), 400);
   }
@@ -39,7 +40,7 @@ export function VisualSelect({ question, options, onSubmit }: VisualSelectProps)
           <motion.button
             key={opt.label}
             onClick={() => pick(opt.label)}
-            disabled={selected !== null}
+            disabled={disabled || selected !== null}
             animate={
               isSelected
                 ? { scale: 1.04, opacity: 1 }
@@ -47,8 +48,8 @@ export function VisualSelect({ question, options, onSubmit }: VisualSelectProps)
                 ? { scale: 0.96, opacity: 0.35 }
                 : { scale: 1, opacity: 1 }
             }
-            whileHover={selected === null ? { scale: 1.02 } : {}}
-            whileTap={selected === null ? { scale: 0.97 } : {}}
+            whileHover={!disabled && selected === null ? { scale: 1.02 } : {}}
+            whileTap={!disabled && selected === null ? { scale: 0.97 } : {}}
             transition={{ type: "spring", stiffness: 340, damping: 26 }}
             className="group relative flex flex-col overflow-hidden rounded-xl border bg-card text-left shadow-sm disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             style={{

@@ -8,9 +8,10 @@ import type { Question } from "@/lib/types";
 interface TextInputProps {
   question: Question;
   onSubmit: (value: { type: "text"; value: string }) => void;
+  disabled?: boolean;
 }
 
-export function TextInput({ question, onSubmit }: TextInputProps) {
+export function TextInput({ question, onSubmit, disabled = false }: TextInputProps) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -19,6 +20,7 @@ export function TextInput({ question, onSubmit }: TextInputProps) {
   }, [question.id]);
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (disabled) return;
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim().length > 3) {
       e.preventDefault();
       submit();
@@ -26,6 +28,7 @@ export function TextInput({ question, onSubmit }: TextInputProps) {
   }
 
   function submit() {
+    if (disabled) return;
     const trimmed = text.trim();
     if (trimmed.length <= 3) return;
     onSubmit({ type: "text", value: trimmed });
@@ -41,9 +44,10 @@ export function TextInput({ question, onSubmit }: TextInputProps) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
+          disabled={disabled}
           placeholder="Take your time..."
           rows={5}
-          className="w-full resize-none rounded-2xl bg-transparent px-5 py-4 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+          className="w-full resize-none rounded-2xl bg-transparent px-5 py-4 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:outline-none disabled:cursor-not-allowed"
         />
       </div>
 
@@ -69,7 +73,7 @@ export function TextInput({ question, onSubmit }: TextInputProps) {
               exit={{ opacity: 0, scale: 0.88, y: 6 }}
               transition={{ duration: 0.2, ease: "easeOut" as const }}
             >
-              <Button onClick={submit} size="sm" className="px-5">
+              <Button onClick={submit} size="sm" className="px-5" disabled={disabled}>
                 Send →
               </Button>
             </motion.div>

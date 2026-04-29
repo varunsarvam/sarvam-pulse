@@ -20,6 +20,7 @@ interface ReflectionProps {
   sessionId: string | null;
   questionId: string;
   questionInputType?: InputType;
+  splitLayout?: boolean;
   onDone: () => void;
 }
 
@@ -292,6 +293,7 @@ export function Reflection({
   sessionId,
   questionId,
   questionInputType,
+  splitLayout = false,
   onDone,
 }: ReflectionProps) {
   const [reacted, setReacted] = useState<string | null>(null);
@@ -390,6 +392,118 @@ export function Reflection({
     (questionInputType === "cards" || questionInputType === "this_or_that") &&
     typeof payload.distribution === "object" &&
     payload.distribution !== null;
+
+  const splitVisual = useTribeLayout ? (
+    <ReflectionTribe copy={copy} quotes={quotes} hideHeadline />
+  ) : useSliderLayout ? (
+    <ReflectionSlider copy={copy} payload={payload} hideHeadline />
+  ) : useDistributionLayout ? (
+    <ReflectionDistribution copy={copy} payload={payload} hideHeadline />
+  ) : (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className="w-full flex justify-center"
+    >
+      {type === "comparison" && <ComparisonVisual payload={payload} />}
+      {type === "majority" && <MajorityVisual payload={payload} />}
+      {type === "minority" && <MinorityVisual payload={payload} />}
+      {type === "tribe" && <TribeVisual payload={payload} />}
+    </motion.div>
+  );
+
+  if (splitLayout) {
+    return (
+      <div
+        className="flex min-h-screen w-full flex-col gap-6 bg-[url('/bg-blue.png')] bg-cover bg-center bg-no-repeat p-5 md:flex-row md:p-8"
+        role={showContinue ? "button" : undefined}
+        tabIndex={showContinue ? 0 : undefined}
+        onClick={handleCardClick}
+        onKeyDown={handleCardKeyDown}
+      >
+        <div className="flex w-full items-center justify-center md:w-[45%]">
+          <div className="relative flex w-full max-w-xl flex-col items-center justify-center gap-8 rounded-3xl bg-white p-8 text-black shadow-2xl md:p-12">
+            {splitVisual}
+
+            <motion.div
+              className="flex items-center gap-4"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45, duration: 0.2 }}
+            >
+              {REACTIONS.map(({ key, emoji }) => (
+                <motion.button
+                  key={key}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleReaction(key);
+                  }}
+                  disabled={reacted !== null}
+                  whileHover={reacted === null ? { scale: 1.18, y: -3 } : {}}
+                  whileTap={reacted === null ? { scale: 0.9 } : {}}
+                  className={[
+                    "relative flex h-16 w-16 items-center justify-center rounded-2xl border border-border/60 bg-card/60 text-3xl shadow-sm transition-colors duration-150",
+                    reacted === null
+                      ? "cursor-pointer hover:border-foreground/20 hover:bg-muted/50 hover:shadow-md"
+                      : "cursor-default",
+                    reacted !== null && reacted !== key ? "opacity-30" : "",
+                  ].join(" ")}
+                >
+                  <motion.span
+                    animate={
+                      reacted === key
+                        ? { scale: [1, 1.55, 1.1, 1.25], y: [0, -14, 2, -4] }
+                        : {}
+                    }
+                    transition={
+                      reacted === key
+                        ? { duration: 0.45, ease: "easeOut" }
+                        : undefined
+                    }
+                  >
+                    {emoji}
+                  </motion.span>
+                </motion.button>
+              ))}
+            </motion.div>
+
+            {showContinue && (
+              <motion.button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleContinue();
+                }}
+                className="text-sm text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: [0.6, 1, 0.6], y: 0 }}
+                transition={{ opacity: { duration: 2, repeat: Infinity }, y: { duration: 0.2 } }}
+              >
+                Continue →
+              </motion.button>
+            )}
+
+            {reflection.source && (
+              <p className="absolute bottom-3 right-4 text-xs uppercase text-muted-foreground/40">
+                {reflection.source === "llm" ? "{llm}" : "{fallback}"}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
+          <motion.p
+            className="font-display max-w-2xl text-left text-4xl leading-tight tracking-tight text-white md:text-5xl"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: "easeOut" }}
+          >
+            {copy}
+          </motion.p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

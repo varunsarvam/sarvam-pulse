@@ -15,6 +15,7 @@ type VoiceState = "idle" | "recording" | "transcribing" | "confirming" | "error"
 interface VoiceInputProps {
   question: Question;
   onSubmit: (value: { type: "voice"; value: string; audioBlob: Blob }) => void;
+  disabled?: boolean;
 }
 
 const MAX_DURATION_MS = 30_000;
@@ -155,7 +156,7 @@ function TranscribingBlock() {
 
 // ─── VoiceInput ───────────────────────────────────────────────────────────────
 
-export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
+export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [transcript, setTranscript] = useState("");
   const [elapsed, setElapsed] = useState(0);
@@ -214,6 +215,7 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
   // ── Recording lifecycle ─────────────────────────────────────────────────────
 
   async function handleTapStart() {
+    if (disabled) return;
     try {
       await capture.start();
       setVoiceState("recording");
@@ -236,6 +238,7 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
   }
 
   async function stopAndProcess() {
+    if (disabled && voiceState === "idle") return;
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
     if (tickRef.current) clearInterval(tickRef.current);
 
@@ -274,10 +277,12 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
   }
 
   function handleTapStop() {
+    if (disabled) return;
     void stopAndProcess();
   }
 
   function handleSubmit() {
+    if (disabled) return;
     onSubmit({
       type: "voice",
       value: transcript.trim(),
@@ -297,6 +302,7 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
   }
 
   function handleSwitchToText() {
+    if (disabled) return;
     setVoiceState("typing");
   }
 
@@ -324,10 +330,11 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
           >
             <motion.button
               onClick={handleTapStart}
-              whileHover={{ scale: 1.06 }}
-              whileTap={{ scale: 0.94 }}
+              disabled={disabled}
+              whileHover={disabled ? {} : { scale: 1.06 }}
+              whileTap={disabled ? {} : { scale: 0.94 }}
               transition={{ type: "spring", stiffness: 360, damping: 24 }}
-              className="relative flex h-28 w-28 items-center justify-center rounded-full border-2 border-border bg-card shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="relative flex h-28 w-28 items-center justify-center rounded-full border-2 border-border bg-card shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
             >
               {/* Idle breathing ring */}
               <motion.span
@@ -338,15 +345,18 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
               <Mic className="h-8 w-8 text-foreground/70" />
             </motion.button>
 
-            <p className="text-sm text-muted-foreground">Tap to speak</p>
+            <p className="text-sm text-muted-foreground">
+              {disabled ? "Listen first" : "Tap to speak"}
+            </p>
 
             {/* Secondary affordance — intentionally quiet */}
             <motion.button
               onClick={handleSwitchToText}
+              disabled={disabled}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.3 }}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded px-1"
+              className="flex items-center gap-1.5 rounded px-1 text-xs text-muted-foreground/50 transition-colors duration-200 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed"
             >
               <Keyboard className="h-3 w-3" />
               type instead
@@ -463,7 +473,7 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
               >
                 Try again
               </button>
-              <Button onClick={handleSubmit} disabled={!transcript.trim()}>
+              <Button onClick={handleSubmit} disabled={disabled || !transcript.trim()}>
                 Looks right →
               </Button>
             </div>
@@ -485,6 +495,7 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
             </p>
             <TextInput
               question={question}
+              disabled={disabled}
               onSubmit={(v) =>
                 onSubmit({
                   type: "voice",
@@ -508,6 +519,7 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
           >
             <TextInput
               question={question}
+              disabled={disabled}
               onSubmit={(v) =>
                 onSubmit({
                   type: "voice",

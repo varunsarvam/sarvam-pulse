@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 interface ReflectionDistributionProps {
   copy: string;
   payload: Record<string, unknown>;
+  hideHeadline?: boolean;
 }
 
 interface OptionColumn {
@@ -56,21 +57,24 @@ function dotPosition(index: number) {
 export function ReflectionDistribution({
   copy,
   payload,
+  hideHeadline = false,
 }: ReflectionDistributionProps) {
   const columns = buildColumns(payload);
 
   return (
     <div className="relative flex min-h-[420px] w-full flex-col items-center justify-center overflow-hidden">
-      <motion.h2
-        className="max-w-md text-center text-2xl font-semibold leading-snug tracking-tight"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-      >
-        {copy}
-      </motion.h2>
+      {!hideHeadline && (
+        <motion.h2
+          className="max-w-md text-center text-2xl font-semibold leading-snug tracking-tight"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        >
+          {copy}
+        </motion.h2>
+      )}
 
-      <div className="mt-12 flex w-full max-w-3xl items-end justify-center gap-5">
+      <div className={`${hideHeadline ? "" : "mt-12"} flex w-full max-w-3xl items-end justify-center gap-5`}>
         {columns.map((column, columnIndex) => {
           const dots = Array.from({ length: column.count });
           const userDot = dotPosition(column.count);
