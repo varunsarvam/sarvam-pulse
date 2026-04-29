@@ -450,12 +450,12 @@ export function Reflection({
 
         {/* Reaction emoji row */}
         <motion.div
-          className="flex items-center gap-3"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.45, duration: 0.15 }}
+          className="flex items-center gap-4"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45, duration: 0.2 }}
         >
-          {REACTIONS.map(({ key, emoji }) => (
+          {REACTIONS.map(({ key, emoji }, i) => (
             <motion.button
               key={key}
               onClick={(e) => {
@@ -463,20 +463,54 @@ export function Reflection({
                 handleReaction(key);
               }}
               disabled={reacted !== null}
-              className="text-2xl p-2 rounded-full hover:bg-muted/40 transition-colors disabled:opacity-40"
-              whileTap={{ scale: 1.3 }}
-              animate={
-                reacted === key
-                  ? { scale: [1, 1.5, 1], y: [0, -12, 0] }
-                  : {}
-              }
-              transition={
-                reacted === key
-                  ? { duration: 0.3, ease: "easeOut" }
-                  : undefined
-              }
+              initial={{ opacity: 0, scale: 0.7, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{
+                delay: 0.5 + i * 0.07,
+                duration: 0.28,
+                type: "spring",
+                bounce: 0.45,
+              }}
+              whileHover={reacted === null ? { scale: 1.18, y: -3 } : {}}
+              whileTap={reacted === null ? { scale: 0.9 } : {}}
+              className={[
+                "relative flex items-center justify-center",
+                "h-16 w-16 rounded-2xl text-3xl",
+                "border border-border/60 bg-card/60 backdrop-blur",
+                "shadow-sm transition-colors duration-150",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                reacted === null
+                  ? "hover:border-foreground/20 hover:bg-muted/50 hover:shadow-md cursor-pointer"
+                  : "cursor-default",
+                reacted !== null && reacted !== key ? "opacity-30" : "",
+              ].join(" ")}
             >
-              {emoji}
+              {/* Selected glow ring */}
+              {reacted === key && (
+                <motion.span
+                  className="absolute inset-0 rounded-2xl ring-2 ring-foreground/25"
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                />
+              )}
+
+              {/* Bounce + float on selection */}
+              <motion.span
+                animate={
+                  reacted === key
+                    ? { scale: [1, 1.55, 1.1, 1.25], y: [0, -14, 2, -4] }
+                    : {}
+                }
+                transition={
+                  reacted === key
+                    ? { duration: 0.45, ease: "easeOut" }
+                    : undefined
+                }
+                className="select-none"
+              >
+                {emoji}
+              </motion.span>
             </motion.button>
           ))}
         </motion.div>

@@ -3,14 +3,14 @@
 import { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Mic } from "lucide-react";
+import { Mic, Keyboard } from "lucide-react";
 import { useAudioCapture } from "@/hooks/useAudioCapture";
 import { TextInput } from "./TextInput";
 import type { Question } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-type VoiceState = "idle" | "recording" | "transcribing" | "confirming" | "error";
+type VoiceState = "idle" | "recording" | "transcribing" | "confirming" | "error" | "typing";
 
 interface VoiceInputProps {
   question: Question;
@@ -296,6 +296,14 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
     setVoiceState("idle");
   }
 
+  function handleSwitchToText() {
+    setVoiceState("typing");
+  }
+
+  function handleSwitchToVoice() {
+    setVoiceState("idle");
+  }
+
   const remaining = Math.max(0, 30 - elapsed);
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -329,7 +337,20 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
               />
               <Mic className="h-8 w-8 text-foreground/70" />
             </motion.button>
+
             <p className="text-sm text-muted-foreground">Tap to speak</p>
+
+            {/* Secondary affordance — intentionally quiet */}
+            <motion.button
+              onClick={handleSwitchToText}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.3 }}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded px-1"
+            >
+              <Keyboard className="h-3 w-3" />
+              type instead
+            </motion.button>
           </motion.div>
         )}
 
@@ -472,6 +493,40 @@ export function VoiceInput({ question, onSubmit }: VoiceInputProps) {
                 })
               }
             />
+          </motion.div>
+        )}
+
+        {/* ── TYPING ── */}
+        {voiceState === "typing" && (
+          <motion.div
+            key="typing"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
+            className="flex flex-col gap-3 w-full"
+          >
+            <TextInput
+              question={question}
+              onSubmit={(v) =>
+                onSubmit({
+                  type: "voice",
+                  value: v.value,
+                  audioBlob: new Blob([], { type: "audio/wav" }),
+                })
+              }
+            />
+            {/* Escape hatch back to voice */}
+            <motion.button
+              onClick={handleSwitchToVoice}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.35, duration: 0.25 }}
+              className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground/45 hover:text-muted-foreground transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded px-1 py-0.5 self-center"
+            >
+              <Mic className="h-3 w-3" />
+              use voice instead
+            </motion.button>
           </motion.div>
         )}
 
