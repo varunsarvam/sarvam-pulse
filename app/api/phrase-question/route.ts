@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   try {
     console.time("phrase-total");
     const body = await req.json();
-    const { tone, form_intent, previous_answers, session_id } = body;
+    const { tone, form_intent, previous_answers, session_id, response_mode } = body;
     question_prompt = body.question_prompt ?? "";
 
     if (!question_prompt || !tone) {
@@ -114,6 +114,37 @@ Good rewrites:
     console.log(
       `[phrase-question] system_prompt_chars=${systemPrompt.length} estimated_tokens=${Math.ceil(systemPrompt.length / 4)}`
     );
+
+    if (response_mode === "json") {
+      console.time("phrase-llm-complete");
+      let accumulated = "";
+      try {
+        for await (const chunk of chatCompleteStream(messages, {
+          model: "sarvam-30b",
+          temperature: 0.9,
+          max_tokens: 150,
+          top_p: 1,
+          extra_body: {
+            chat_template_kwargs: {
+              enable_thinking: false,
+            },
+          },
+        })) {
+          if (!chunk || (!accumulated && !chunk.trim())) continue;
+          accumulated += chunk;
+        }
+        const phrased = stripThinking(accumulated) || question_prompt;
+        if (cacheKey) cache.set(cacheKey, phrased);
+        console.timeEnd("phrase-llm-complete");
+        console.timeEnd("phrase-total");
+        return NextResponse.json({ phrased });
+      } catch (e) {
+        console.error("[phrase-question json]:", e);
+        console.timeEnd("phrase-llm-complete");
+        console.timeEnd("phrase-total");
+        return NextResponse.json({ phrased: question_prompt });
+      }
+    }
 
     // ── SSE streaming response ────────────────────────────
     // sarvam-30b sends reasoning in delta.reasoning_content and the answer in

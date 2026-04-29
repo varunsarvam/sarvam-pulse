@@ -347,6 +347,28 @@ export async function POST(req: NextRequest) {
             .map((q) => (q.length > 100 ? `${q.slice(0, 100)}...` : q)) ?? [];
       }
 
+      // Strip stale/renamed option keys from the distribution payload so the
+      // chart only shows columns for options that currently exist on the question.
+      // Happens when options were edited after answers were already collected.
+      if (
+        (reflection.type === "majority" || reflection.type === "minority") &&
+        typeof reflection.payload.distribution === "object" &&
+        reflection.payload.distribution !== null &&
+        Array.isArray(question.options)
+      ) {
+        const validOptions = new Set(
+          (question.options as unknown[]).filter(
+            (o): o is string => typeof o === "string"
+          )
+        );
+        if (validOptions.size > 0) {
+          const dist = reflection.payload.distribution as Record<string, number>;
+          reflection.payload.distribution = Object.fromEntries(
+            Object.entries(dist).filter(([key]) => validOptions.has(key))
+          );
+        }
+      }
+
       const generated = await generateReflectionCopy(
         reflection.type,
         reflection.payload,

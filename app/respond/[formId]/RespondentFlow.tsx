@@ -43,7 +43,12 @@ function parseVisualOptions(
 
 // ─── Stage types ──────────────────────────────────────────────────────────────
 
-type Stage = "ENTRY" | "QUESTION" | "FOLLOWUP" | "REFLECTION" | "COMPLETE";
+type Stage = "ENTRY" | "SETUP" | "QUESTION" | "FOLLOWUP" | "REFLECTION" | "COMPLETE";
+
+interface PreloadItem {
+  phrased: string;
+  audioUrl: string;
+}
 
 // ─── Motion variants ──────────────────────────────────────────────────────────
 
@@ -341,6 +346,68 @@ function ThinkingDots() {
   );
 }
 
+function SetupScreen({
+  progress,
+  canContinue,
+  hasError,
+  onContinue,
+}: {
+  progress: number;
+  canContinue: boolean;
+  hasError: boolean;
+  onContinue: () => void;
+}) {
+  return (
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+      <div className="relative z-10 flex flex-col gap-7 px-12 py-16 max-w-lg w-full">
+        <div className="space-y-3">
+          <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
+            Before we begin
+          </p>
+          <h1 className="text-4xl font-bold tracking-tight leading-tight">
+            You&apos;re about to have a conversation.
+          </h1>
+          <p className="text-base leading-relaxed text-muted-foreground">
+            Pulse listens, responds, and shows you where you stand on every
+            answer. Find a quiet moment. We&apos;ll need mic access in a moment.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <motion.div
+              className="h-full rounded-full bg-foreground/70"
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.round(progress * 100)}%` }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground/70">
+            {hasError
+              ? "Some audio is still preparing. You can continue and Pulse will load the rest live."
+              : "Warming up the questions and voice so the flow feels instant."}
+          </p>
+        </div>
+
+        <motion.div
+          className="w-fit"
+          animate={canContinue ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+          transition={{ duration: 2.2, repeat: canContinue ? Infinity : 0, ease: "easeInOut" }}
+        >
+          <Button
+            size="lg"
+            className="text-base px-8"
+            onClick={onContinue}
+            disabled={!canContinue}
+          >
+            I&apos;m ready →
+          </Button>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Question stage ───────────────────────────────────────────────────────────
 
 // ms between each character the typewriter drains from the queue
@@ -359,6 +426,7 @@ function QuestionStage({
   ttsDisplayText,
   ttsDone,
   preamble,
+  preloaded,
 }: {
   question: Question;
   index: number;
@@ -367,10 +435,11 @@ function QuestionStage({
   tone: string;
   formIntent: string | null;
   onAnswer: (rawValue: unknown, transcript?: string) => void;
-  onPhrasedReady: (text: string) => void;
+  onPhrasedReady: (text: string, audioUrl?: string | null) => void;
   ttsDisplayText: string;
   ttsDone: boolean;
   preamble?: string;
+  preloaded?: PreloadItem | null;
 }) {
   const { input_type, options } = question;
   const [phrased, setPhrased] = useState<string | null>(null);
@@ -472,13 +541,24 @@ function QuestionStage({
     setInputReady(false);
     setPendingTypewriterText(null);
 
-    function queueForTtsThenType(text: string) {
+    function queueForTtsThenType(text: string, audioUrl?: string | null) {
       ttsTriggered = true;
-      onPhrasedReadyRef.current(text);
+      onPhrasedReadyRef.current(text, audioUrl);
       setPendingTypewriterText(text);
       ttsFallbackTimerRef.current = setTimeout(() => {
         if (!typingActiveRef.current) startTypewriterWithText(text);
       }, 5000);
+    }
+
+    if (preloaded) {
+      clearTimeout(timeout);
+      queueForTtsThenType(preloaded.phrased, preloaded.audioUrl);
+      return () => {
+        cancelled = true;
+        if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
+        if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
+        if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
+      };
     }
 
     // ── Client-side sessionStorage cache ──
@@ -709,6 +789,7 @@ function FollowUpStage({
   onPhrasedReady,
   ttsDisplayText,
   ttsDone,
+  preloaded,
 }: {
   prompt: string;
   inputType: "voice" | "text";
@@ -716,9 +797,10 @@ function FollowUpStage({
   tone: string;
   questionIntent: string | null;
   onAnswer: (rawValue: unknown, transcript?: string) => void;
-  onPhrasedReady: (text: string) => void;
+  onPhrasedReady: (text: string, audioUrl?: string | null) => void;
   ttsDisplayText: string;
   ttsDone: boolean;
+  preloaded?: PreloadItem | null;
 }) {
   // Stub question satisfies component prop contracts
   const stubQuestion = {
@@ -746,6 +828,7 @@ function FollowUpStage({
       ttsDisplayText={ttsDisplayText}
       ttsDone={ttsDone}
       preamble="One more thing…"
+      preloaded={preloaded}
     />
   );
 }
@@ -830,11 +913,16 @@ export function RespondentFlow({
   });
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [phrasedForTTS, setPhrasedForTTS] = useState<string | null>(null);
+  const [preloadedAudioUrlForTTS, setPreloadedAudioUrlForTTS] = useState<string | null>(null);
   const [ttsDisplayText, setTtsDisplayText] = useState("");
   const [ttsDone, setTtsDone] = useState(false);
+  const [preloadProgress, setPreloadProgress] = useState(0);
+  const [setupMinElapsed, setSetupMinElapsed] = useState(false);
+  const [preloadError, setPreloadError] = useState(false);
 
   // ── Preload cache ──
-  const preloadCacheRef = useRef<Map<string, string>>(new Map());
+  const preloadCacheRef = useRef<Map<string, PreloadItem>>(new Map());
+  const preloadStartedRef = useRef(false);
 
   function toggleMute() {
     setMuted((prev) => {
@@ -852,37 +940,102 @@ export function RespondentFlow({
 
   const leftBg = TONE_BG[form.tone] ?? TONE_BG.playful;
 
-  // Preload next question phrasing during reflection
-  const preloadNextQuestion = useCallback(() => {
-    const nextIdx = questionIndex + 1;
-    if (nextIdx >= questions.length) return;
-    const nextQ = questions[nextIdx];
-    if (preloadCacheRef.current.has(nextQ.id)) return;
+  function handlePhrasedReady(text: string, audioUrl?: string | null) {
+    setPhrasedForTTS(text);
+    setPreloadedAudioUrlForTTS(audioUrl ?? null);
+  }
 
-    fetch("/api/phrase-question", {
+  async function preloadQuestion(
+    q: Question,
+    activeSessionId: string,
+    onAssetDone: () => void
+  ) {
+    const phraseRes = await fetch("/api/phrase-question", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        question_prompt: nextQ.prompt,
+        question_prompt: q.prompt,
         tone: form.tone,
         form_intent: form.intent,
-        session_id: sessionId,
+        session_id: activeSessionId,
+        response_mode: "json",
       }),
-    })
-      .then(async (res) => {
-        if (!res.ok) return;
-        const ct = res.headers.get("content-type") ?? "";
-        if (ct.includes("application/json")) {
-          const { phrased } = await res.json();
-          if (phrased) {
-            preloadCacheRef.current.set(nextQ.id, phrased);
-            if (sessionId && typeof sessionStorage !== "undefined") {
-              sessionStorage.setItem(`phrase:${sessionId}:${nextQ.id}`, phrased);
-            }
-          }
-        }
-      })
-      .catch(() => {});
+    });
+
+    const { phrased } = (await phraseRes.json()) as { phrased?: string };
+    const text = phrased || q.prompt;
+    onAssetDone();
+
+    const ttsRes = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, tone: form.tone }),
+    });
+    if (!ttsRes.ok) throw new Error(`TTS preload failed: ${ttsRes.status}`);
+    const audioBlob = await ttsRes.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const old = preloadCacheRef.current.get(q.id);
+    if (old?.audioUrl) URL.revokeObjectURL(old.audioUrl);
+    preloadCacheRef.current.set(q.id, { phrased: text, audioUrl });
+    onAssetDone();
+  }
+
+  async function preloadAll(activeSessionId: string) {
+    if (preloadStartedRef.current) return;
+    preloadStartedRef.current = true;
+    setPreloadProgress(0);
+    setPreloadError(false);
+
+    let completed = 0;
+    const total = questions.length * 2;
+    const markDone = () => {
+      completed += 1;
+      setPreloadProgress(Math.min(1, completed / total));
+    };
+
+    const results = await Promise.allSettled(
+      questions.map((q) => preloadQuestion(q, activeSessionId, markDone))
+    );
+
+    if (results.some((r) => r.status === "rejected")) {
+      setPreloadError(true);
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      preloadCacheRef.current.forEach(({ audioUrl }) => {
+        URL.revokeObjectURL(audioUrl);
+      });
+      preloadCacheRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (stage !== "SETUP") return;
+
+    setSetupMinElapsed(false);
+    const minTimer = setTimeout(() => setSetupMinElapsed(true), 3000);
+
+    return () => {
+      clearTimeout(minTimer);
+    };
+  }, [stage]);
+
+  useEffect(() => {
+    if (stage !== "SETUP" || preloadProgress < 1) return;
+    const autoTimer = setTimeout(() => setStage("QUESTION"), 8000);
+    return () => clearTimeout(autoTimer);
+  }, [stage, preloadProgress]);
+
+  // Preload next question phrasing during reflection
+  const preloadNextQuestion = useCallback(() => {
+    const nextIdx = questionIndex + 1;
+    if (nextIdx >= questions.length || !sessionId) return;
+    const nextQ = questions[nextIdx];
+    if (preloadCacheRef.current.has(nextQ.id)) return;
+
+    void preloadQuestion(nextQ, sessionId, () => {});
   }, [questionIndex, questions, form.tone, form.intent, sessionId]);
 
   useEffect(() => {
@@ -911,12 +1064,17 @@ export function RespondentFlow({
       if (res.ok) {
         const { id } = await res.json();
         setSessionId(id);
+        setAvatarMode("idle");
+        setStage("SETUP");
+        void preloadAll(id);
+        return;
       }
     } catch {
       // Don't block the flow — session is best-effort for demo
     }
-    setAvatarMode("thinking");
-    setStage("QUESTION");
+    setPreloadError(true);
+    setAvatarMode("idle");
+    setStage("SETUP");
   }
 
   function advanceQuestion() {
@@ -926,6 +1084,7 @@ export function RespondentFlow({
       nullReflectionTimerRef.current = null;
     }
     setPhrasedForTTS(null);
+    setPreloadedAudioUrlForTTS(null);
     setIsSpeaking(false);
     setTtsDisplayText("");
     setTtsDone(false);
@@ -1093,6 +1252,7 @@ export function RespondentFlow({
     }
     const ref = reflection ?? null;
     setPhrasedForTTS(null);
+    setPreloadedAudioUrlForTTS(null);
     setIsSpeaking(false);
     setTtsDisplayText("");
     setTtsDone(false);
@@ -1153,6 +1313,7 @@ export function RespondentFlow({
               text={phrasedForTTS}
               tone={form.tone}
               muted={muted}
+              preloadedAudioUrl={preloadedAudioUrlForTTS}
               onSpeakingChange={handleSpeakingChange}
               onDisplayedTextChange={(text, isDone) => {
                 setTtsDisplayText(text);
@@ -1176,6 +1337,22 @@ export function RespondentFlow({
             </motion.div>
           )}
 
+          {stage === "SETUP" && (
+            <motion.div key="setup" {...fadeUp} className="w-full h-full">
+              <SetupScreen
+                progress={preloadProgress}
+                canContinue={
+                  setupMinElapsed && (preloadProgress >= 0.6 || preloadError)
+                }
+                hasError={preloadError}
+                onContinue={() => {
+                  setAvatarMode("thinking");
+                  setStage("QUESTION");
+                }}
+              />
+            </motion.div>
+          )}
+
           {stage === "QUESTION" && questions[questionIndex] && (
             <motion.div
               key={`question-${questionIndex}`}
@@ -1190,9 +1367,10 @@ export function RespondentFlow({
                 tone={form.tone}
                 formIntent={form.intent}
                 onAnswer={handleAnswer}
-                onPhrasedReady={setPhrasedForTTS}
+                onPhrasedReady={handlePhrasedReady}
                 ttsDisplayText={ttsDisplayText}
                 ttsDone={ttsDone}
+                preloaded={preloadCacheRef.current.get(questions[questionIndex].id) ?? null}
               />
             </motion.div>
           )}
@@ -1210,7 +1388,7 @@ export function RespondentFlow({
                 tone={form.tone}
                 questionIntent={questions[questionIndex]?.intent ?? null}
                 onAnswer={handleFollowUpAnswer}
-                onPhrasedReady={setPhrasedForTTS}
+                onPhrasedReady={handlePhrasedReady}
                 ttsDisplayText={ttsDisplayText}
                 ttsDone={ttsDone}
               />

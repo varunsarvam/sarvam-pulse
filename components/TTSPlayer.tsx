@@ -9,6 +9,7 @@ interface TTSPlayerProps {
   text: string;
   tone?: string;
   muted: boolean;
+  preloadedAudioUrl?: string | null;
   onEnded?: () => void;
   onSpeakingChange?: (speaking: boolean) => void;
   /**
@@ -22,6 +23,7 @@ export function TTSPlayer({
   text,
   tone = "insightful",
   muted,
+  preloadedAudioUrl,
   onEnded,
   onSpeakingChange,
   onDisplayedTextChange,
@@ -65,45 +67,49 @@ export function TTSPlayer({
       try {
         onDisplayedTextChangeRef.current?.("", false);
 
-        const res = await fetch("/api/tts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, tone }),
-          signal: controller.signal,
-        });
+        if (preloadedAudioUrl) {
+          objectUrl = null;
+        } else {
+          const res = await fetch("/api/tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, tone }),
+            signal: controller.signal,
+          });
 
-        if (!res.ok || !res.body) {
-          console.error("[TTSPlayer] bad response:", res.status);
-          onDisplayedTextChangeRef.current?.(text, true);
-          return;
-        }
-
-        // Blob-first path: collect all chunks then play as a single object URL.
-        // Avoids MediaSource Extensions (unreliable on iOS Safari).
-        const reader = res.body.getReader();
-        const chunks: ArrayBuffer[] = [];
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done || cancelled) break;
-          if (value) {
-            chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+          if (!res.ok || !res.body) {
+            console.error("[TTSPlayer] bad response:", res.status);
+            onDisplayedTextChangeRef.current?.(text, true);
+            return;
           }
+
+          // Blob-first path: collect all chunks then play as a single object URL.
+          // Avoids MediaSource Extensions (unreliable on iOS Safari).
+          const reader = res.body.getReader();
+          const chunks: ArrayBuffer[] = [];
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done || cancelled) break;
+            if (value) {
+              chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+            }
+          }
+
+          if (cancelled) return;
+
+          const blob = new Blob(chunks, { type: "audio/mpeg" });
+          objectUrl = URL.createObjectURL(blob);
         }
-
-        if (cancelled) return;
-
-        const blob = new Blob(chunks, { type: "audio/mpeg" });
-        objectUrl = URL.createObjectURL(blob);
 
         const audio = audioRef.current;
         if (!audio || cancelled) {
-          URL.revokeObjectURL(objectUrl);
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
           return;
         }
 
         audio.volume = muted ? 0 : 1;
-        audio.src = objectUrl;
+        audio.src = preloadedAudioUrl ?? objectUrl ?? "";
 
         audio.onplay = () => {
           setPlaying(true);
@@ -178,7 +184,7 @@ export function TTSPlayer({
     };
     // Only re-run when the text or voice changes, not on callback identity changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, tone]);
+  }, [text, tone, preloadedAudioUrl]);
 
   return (
     <>
