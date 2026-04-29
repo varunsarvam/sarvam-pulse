@@ -9,7 +9,7 @@ Pulse is a hackathon-built voice-first conversational form product. The responde
 - Tailwind CSS + shadcn/ui (new-york style, neutral base)
 - Framer Motion for all animations
 - Supabase for database + realtime
-- Sarvam APIs (saarika:v2.5, bulbul:v3, sarvam-m) for STT/TTS/LLM
+- Sarvam APIs (saarika:v2.5, bulbul:v3, sarvam-30b) for STT/TTS/LLM
 - Deployed on Vercel
 
 ## Critical rules

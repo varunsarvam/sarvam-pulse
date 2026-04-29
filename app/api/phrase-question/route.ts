@@ -1,30 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chatComplete } from "@/lib/sarvam";
+import { chatCompleteStream } from "@/lib/sarvam";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Sarvam models embed <think>…</think> chain-of-thought before the final answer.
-// Strip it so we only return the actual rewritten question.
+// Strip model reasoning wrappers from the final accumulated text.
+// Returns "" if the <think> block was truncated (never closed), so the caller
+// can fall back to the original question rather than showing raw thinking text.
 function stripThinking(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  // If there's an unclosed <think> block, the model hit token limit mid-think
+  if (/<think>/i.test(text) && !/<\/think>/i.test(text)) return "";
+
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<\/?answer>/gi, "")
+    .trim();
 }
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
-// Keyed by JSON.stringify({ session_id, question_prompt, tone, form_intent }).
-// Per-session: same session gets the same phrasing; different sessions get
-// fresh LLM calls so each respondent experiences unique language.
-// If session_id is absent the call is treated as one-off (no caching).
+// Keyed by { session_id, question_prompt, tone, form_intent }.
+// Same session → instant JSON (cache hit). Different sessions → fresh stream.
+// No session_id → one-off, no caching.
 
 const cache = new Map<string, string>();
+
+// ─── SSE helpers ──────────────────────────────────────────────────────────────
+
+const enc = new TextEncoder();
+
+function sseEvent(data: object): Uint8Array {
+  return enc.encode(`data: ${JSON.stringify(data)}\n\n`);
+}
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const requestStart = Date.now();
+  let question_prompt = "";
+
   try {
-    const { question_prompt, tone, form_intent, previous_answers, session_id } =
-      await req.json();
+    console.time("phrase-total");
+    const body = await req.json();
+    const { tone, form_intent, previous_answers, session_id } = body;
+    question_prompt = body.question_prompt ?? "";
 
     if (!question_prompt || !tone) {
+      console.timeEnd("phrase-total");
       return NextResponse.json(
         { error: "question_prompt and tone are required." },
         { status: 400 }
@@ -35,11 +55,17 @@ export async function POST(req: NextRequest) {
       ? JSON.stringify({ session_id, question_prompt, tone, form_intent })
       : null;
 
+    // ── Cache hit → instant JSON (no streaming overhead) ──
     if (cacheKey) {
       const cached = cache.get(cacheKey);
-      if (cached) return NextResponse.json({ phrased: cached });
+      if (cached) {
+        console.timeEnd("phrase-total");
+        return NextResponse.json({ phrased: cached });
+      }
     }
 
+    // ── Build prompt ──────────────────────────────────────
+    console.time("phrase-prompt-build");
     const examplesBlock = `
 Examples of what variation looks like (for tone='insightful'):
 
@@ -71,30 +97,99 @@ Good rewrites:
       examplesBlock,
     ].join("\n");
 
-    // When there's no session_id, add a small random seed to the message so
-    // the Sarvam API doesn't serve a cached identical response.
-    const seed = !session_id ? ` [seed:${Math.random().toString(36).slice(2, 7)}]` : "";
+    const seed = !session_id
+      ? ` [seed:${Math.random().toString(36).slice(2, 7)}]`
+      : "";
 
-    const userMessage = previous_answers?.length
-      ? `Original question: ${question_prompt}\n\nContext — previous answers in this session: ${JSON.stringify(previous_answers)}${seed}`
-      : `Original question: ${question_prompt}${seed}`;
+    const userMessage =
+      previous_answers?.length
+        ? `Original question: ${question_prompt}\n\nContext — previous answers in this session: ${JSON.stringify(previous_answers)}${seed}`
+        : `Original question: ${question_prompt}${seed}`;
 
-    const result = await chatComplete(
-      [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      { model: "sarvam-m", temperature: 0.9, max_tokens: 2048 }
+    const messages = [
+      { role: "system" as const, content: systemPrompt },
+      { role: "user" as const, content: userMessage },
+    ];
+    console.timeEnd("phrase-prompt-build");
+    console.log(
+      `[phrase-question] system_prompt_chars=${systemPrompt.length} estimated_tokens=${Math.ceil(systemPrompt.length / 4)}`
     );
 
-    const rawContent = result.choices?.[0]?.message?.content ?? "";
-    const phrased = stripThinking(rawContent) || question_prompt;
+    // ── SSE streaming response ────────────────────────────
+    // sarvam-30b sends reasoning in delta.reasoning_content and the answer in
+    // delta.content. chatCompleteStream yields only delta.content, so chunks
+    // naturally arrive only once reasoning finishes. reasoning_effort:'low'
+    // keeps the thinking phase as short as possible.
+    const stream = new ReadableStream({
+      async start(controller) {
+        let accumulated = "";
+        let sawFirstChunk = false;
 
-    if (cacheKey) cache.set(cacheKey, phrased);
+        try {
+          console.time("phrase-llm-firstchunk");
+          for await (const chunk of chatCompleteStream(messages, {
+            model: "sarvam-30b",
+            temperature: 0.9,
+            max_tokens: 150,
+            top_p: 1,
+            extra_body: {
+              chat_template_kwargs: {
+                enable_thinking: false,
+              },
+            },
+          })) {
+            // Skip empty or whitespace-only leading chunks (sarvam-30b emits
+            // a bare "\n" as its first content token)
+            if (!chunk || (!accumulated && !chunk.trim())) continue;
+            if (!sawFirstChunk) {
+              sawFirstChunk = true;
+              console.timeEnd("phrase-llm-firstchunk");
+              console.time("phrase-llm-complete");
+              console.log(
+                `[phrase-question] request_to_first_chunk_ms=${Date.now() - requestStart}`
+              );
+            }
+            accumulated += chunk;
+            controller.enqueue(sseEvent({ chunk }));
+          }
 
-    return NextResponse.json({ phrased });
+          if (!sawFirstChunk) {
+            console.timeEnd("phrase-llm-firstchunk");
+            console.time("phrase-llm-complete");
+          }
+          console.timeEnd("phrase-llm-complete");
+          // Strip any wrapper tags that slipped through, then cache
+          const phrased = stripThinking(accumulated) || question_prompt;
+          controller.enqueue(sseEvent({ done: true, phrased }));
+          if (cacheKey) cache.set(cacheKey, phrased);
+        } catch (e) {
+          if (!sawFirstChunk) {
+            console.timeEnd("phrase-llm-firstchunk");
+          } else {
+            console.timeEnd("phrase-llm-complete");
+          }
+          console.error("[phrase-question stream]:", e);
+          controller.enqueue(
+            sseEvent({ error: true, fallback: question_prompt })
+          );
+        } finally {
+          controller.close();
+          console.timeEnd("phrase-total");
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
   } catch (e) {
     console.error("[phrase-question] error:", e);
+    console.timeEnd("phrase-total");
     return NextResponse.json(
       { error: "Failed to phrase question." },
       { status: 500 }

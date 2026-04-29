@@ -7,16 +7,19 @@ function stripThinking(text: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    console.time("follow-up-total");
     const { question_prompt, question_intent, answer_text, tone } =
       await req.json();
 
     if (!question_prompt || !answer_text || !tone) {
+      console.timeEnd("follow-up-total");
       return NextResponse.json(
         { error: "question_prompt, answer_text, and tone are required." },
         { status: 400 }
       );
     }
 
+    console.time("follow-up-prompt-build");
     const systemPrompt = [
       `You're a thoughtful host having a conversation.`,
       `Decide if this answer needs ONE follow-up to reach the question's intent: ${question_intent ?? question_prompt}.`,
@@ -27,21 +30,39 @@ export async function POST(req: NextRequest) {
     ].join(" ");
 
     const userMessage = `Question asked: ${question_prompt}\nAnswer given: ${answer_text}`;
+    console.timeEnd("follow-up-prompt-build");
+    console.log(
+      `[follow-up] system_prompt_chars=${systemPrompt.length} estimated_tokens=${Math.ceil(systemPrompt.length / 4)}`
+    );
 
+    console.time("follow-up-llm-complete");
     const result = await chatComplete(
       [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      { model: "sarvam-m", temperature: 0.6, max_tokens: 2048 }
+      {
+        model: "sarvam-30b",
+        temperature: 0.6,
+        max_tokens: 60,
+        top_p: 1,
+        extra_body: {
+          chat_template_kwargs: {
+            enable_thinking: false,
+          },
+        },
+      }
     );
+    console.timeEnd("follow-up-llm-complete");
 
     const content = stripThinking(result.choices?.[0]?.message?.content ?? "");
     const follow_up = !content || content.toUpperCase() === "SKIP" ? null : content;
 
+    console.timeEnd("follow-up-total");
     return NextResponse.json({ follow_up });
   } catch (e) {
     console.error("[follow-up] error:", e);
+    console.timeEnd("follow-up-total");
     // Fail gracefully — no follow-up is better than a broken flow
     return NextResponse.json({ follow_up: null });
   }

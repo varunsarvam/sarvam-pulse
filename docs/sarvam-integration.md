@@ -89,7 +89,7 @@ Available models (use sarvam-105b by default):
 
 - "sarvam-105b" — flagship 105B param MoE, 128K context. Best quality, slower. DEFAULT for all LLM tasks.
 - "sarvam-30b" — mid-tier, 64K context. Faster. Use only if 105B is too slow on the question-phrasing hot path.
-- "sarvam-m" — legacy 24B model. Don't use for new code unless instructed.
+- "sarvam-30b" — 30B model. Use for phrase-question, follow-up, normalize routes.
 
 If the chat endpoint path returns 404, check the Sarvam dashboard playground for the current shape.
 
