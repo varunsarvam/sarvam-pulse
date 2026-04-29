@@ -1,22 +1,101 @@
 import Link from "next/link";
+import { FormCard } from "@/components/FormCard";
+import { Button } from "@/components/ui/button";
+import { createAdminClient } from "@/lib/supabase/server";
+import type { Form } from "@/lib/types";
 
-export default function Home() {
+interface SessionCountRow {
+  form_id: string;
+  completed_at: string | null;
+}
+
+async function getFormsDashboardData() {
+  const supabase = createAdminClient();
+
+  const [{ data: forms }, { data: sessions }] = await Promise.all([
+    supabase
+      .from("forms")
+      .select("*")
+      .order("created_at", { ascending: false }),
+    supabase.from("sessions").select("form_id, completed_at"),
+  ]);
+
+  const counts = new Map<
+    string,
+    { responseCount: number; completedCount: number }
+  >();
+
+  for (const session of (sessions ?? []) as SessionCountRow[]) {
+    const current = counts.get(session.form_id) ?? {
+      responseCount: 0,
+      completedCount: 0,
+    };
+    current.responseCount += 1;
+    if (session.completed_at) current.completedCount += 1;
+    counts.set(session.form_id, current);
+  }
+
+  return {
+    forms: (forms ?? []) as Form[],
+    counts,
+  };
+}
+
+export default async function Home() {
+  const { forms, counts } = await getFormsDashboardData();
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-8">
-      <h1 className="text-6xl font-bold tracking-tight">Pulse</h1>
-      <div className="flex gap-4">
-        <Link
-          href="/create"
-          className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Create a form
-        </Link>
-        <Link
-          href="/respond/demo"
-          className="rounded-md border border-border px-6 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
-        >
-          Try a demo
-        </Link>
+    <main className="min-h-screen bg-background">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
+        <header className="flex items-center justify-between gap-6">
+          <div>
+            <p className="text-xs font-medium tracking-[0.24em] uppercase text-muted-foreground">
+              Pulse
+            </p>
+            <h1 className="mt-2 text-4xl font-bold tracking-tight">
+              Conversational forms
+            </h1>
+          </div>
+          <Button asChild size="lg" className="px-6">
+            <Link href="/create">+ New form</Link>
+          </Button>
+        </header>
+
+        {forms.length === 0 ? (
+          <section className="flex min-h-[60vh] items-center justify-center">
+            <div className="flex max-w-md flex-col items-center gap-5 text-center">
+              <h2 className="text-3xl font-semibold tracking-tight">
+                Build your first conversational form.
+              </h2>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Pulse turns questions into a moment of expression. Make a form
+                and share it with anyone.
+              </p>
+              <Button asChild size="lg" className="px-8">
+                <Link href="/create">Create your first form</Link>
+              </Button>
+            </div>
+          </section>
+        ) : (
+          <section className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {forms.map((form, index) => {
+              const count = counts.get(form.id) ?? {
+                responseCount: 0,
+                completedCount: 0,
+              };
+
+              return (
+                <FormCard
+                  key={form.id}
+                  form={form}
+                  responseCount={count.responseCount}
+                  completedCount={count.completedCount}
+                  index={index}
+                />
+              );
+            })}
+          </section>
+        )}
       </div>
     </main>
   );

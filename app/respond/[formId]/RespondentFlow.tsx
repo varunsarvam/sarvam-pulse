@@ -5,6 +5,7 @@ import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import { AIPresence, type AvatarMode } from "@/components/AIPresence";
+import { BackgroundMusic } from "@/components/BackgroundMusic";
 import { TTSPlayer } from "@/components/TTSPlayer";
 import { useLiveData } from "@/hooks/useLiveData";
 import { Button } from "@/components/ui/button";
@@ -391,28 +392,74 @@ function SetupScreen({
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-      <div className="relative z-10 flex flex-col gap-7 px-12 py-16 max-w-lg w-full">
-        <div className="space-y-3">
-          <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
-            Before we begin
-          </p>
-          <h1 className="text-4xl font-bold tracking-tight leading-tight">
-            You&apos;re about to have a conversation.
-          </h1>
-          <p className="text-base leading-relaxed text-muted-foreground">
-            Pulse listens, responds, and shows you where you stand on every
-            answer. Find a quiet moment. We&apos;ll need mic access in a moment.
-          </p>
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, rgba(139,92,246,0.12), transparent 34%), radial-gradient(circle at 80% 75%, rgba(59,130,246,0.10), transparent 30%)",
+        }}
+      />
+
+      <div className="relative z-10 flex flex-col gap-7 px-10 py-14 max-w-xl w-full">
+        <div className="space-y-4">
+          <motion.p
+            className="text-xs font-medium tracking-[0.24em] uppercase text-muted-foreground"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+          >
+            The room is getting ready
+          </motion.p>
+          <motion.h1
+            className="text-4xl font-bold tracking-tight leading-tight"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08, duration: 0.5, ease: "easeOut" }}
+          >
+            A voice will meet you here.
+          </motion.h1>
+          <motion.p
+            className="text-base leading-relaxed text-muted-foreground max-w-md"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.16, duration: 0.5, ease: "easeOut" }}
+          >
+            Answer naturally. Pulse will listen, ask back, and reveal the
+            invisible patterns forming around your responses.
+          </motion.p>
         </div>
 
-        <div className="w-full max-w-sm">
+        <motion.div
+          className="grid grid-cols-3 gap-2 max-w-md"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.24, duration: 0.45 }}
+        >
+          {["Speak freely", "See the room", "Leave with a signal"].map((text) => (
+            <div
+              key={text}
+              className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.03] px-3 py-3 text-center text-[11px] leading-tight text-muted-foreground/80"
+            >
+              {text}
+            </div>
+          ))}
+        </motion.div>
+
+        <motion.div
+          className="w-full max-w-sm"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.32, duration: 0.5, ease: "easeOut" }}
+        >
           <input
             ref={inputRef}
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="What should we call you?"
-            className="w-full rounded-2xl border border-border/70 bg-background/60 px-5 py-4 text-lg text-foreground placeholder:text-muted-foreground/45 shadow-sm outline-none transition-colors focus:border-foreground/30"
+            className="w-full rounded-2xl border border-foreground/[0.08] bg-background/70 px-5 py-4 text-lg text-foreground placeholder:text-muted-foreground/45 shadow-[0_12px_40px_rgba(0,0,0,0.10)] outline-none backdrop-blur transition-colors focus:border-foreground/30"
             maxLength={30}
           />
           {nameError && (
@@ -420,12 +467,17 @@ function SetupScreen({
               {nameError}
             </p>
           )}
-        </div>
+        </motion.div>
 
-        <div className="space-y-3">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <motion.div
+          className="space-y-3 max-w-md"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.45 }}
+        >
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.08]">
             <motion.div
-              className="h-full rounded-full bg-foreground/70"
+              className="h-full rounded-full bg-gradient-to-r from-violet-300 via-foreground/80 to-blue-300"
               initial={{ width: 0 }}
               animate={{ width: `${Math.round(progress * 100)}%` }}
               transition={{ duration: 0.35, ease: "easeOut" }}
@@ -433,10 +485,10 @@ function SetupScreen({
           </div>
           <p className="text-xs text-muted-foreground/70">
             {hasError
-              ? "Some audio is still preparing. You can continue and Pulse will load the rest live."
-              : "Warming up the questions and voice so the flow feels instant."}
+              ? "A few things are still tuning themselves. You can begin; Pulse will catch up gracefully."
+              : "Preparing the voice, pacing the questions, opening the signal."}
           </p>
-        </div>
+        </motion.div>
 
         <motion.div
           className="w-fit"
@@ -449,7 +501,7 @@ function SetupScreen({
             onClick={onContinue}
             disabled={!canContinue}
           >
-            I&apos;m ready →
+            Begin the conversation →
           </Button>
         </motion.div>
       </div>
@@ -968,6 +1020,7 @@ export function RespondentFlow({
     if (typeof window === "undefined") return false;
     return localStorage.getItem("pulse-tts-muted") === "true";
   });
+  const [musicActive, setMusicActive] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [phrasedForTTS, setPhrasedForTTS] = useState<string | null>(null);
   const [preloadedAudioUrlForTTS, setPreloadedAudioUrlForTTS] = useState<string | null>(null);
@@ -980,6 +1033,7 @@ export function RespondentFlow({
   // ── Preload cache ──
   const preloadCacheRef = useRef<Map<string, PreloadItem>>(new Map());
   const preloadStartedRef = useRef(false);
+  const preloadNameRef = useRef<string | null>(null);
 
   function toggleMute() {
     setMuted((prev) => {
@@ -1025,6 +1079,7 @@ export function RespondentFlow({
 
     const { phrased } = (await phraseRes.json()) as { phrased?: string };
     const text = phrased || q.prompt;
+    if (preloadNameRef.current !== activeName) return;
     onAssetDone();
 
     const ttsRes = await fetch("/api/tts", {
@@ -1035,6 +1090,10 @@ export function RespondentFlow({
     if (!ttsRes.ok) throw new Error(`TTS preload failed: ${ttsRes.status}`);
     const audioBlob = await ttsRes.blob();
     const audioUrl = URL.createObjectURL(audioBlob);
+    if (preloadNameRef.current !== activeName) {
+      URL.revokeObjectURL(audioUrl);
+      return;
+    }
     const old = preloadCacheRef.current.get(q.id);
     if (old?.audioUrl) URL.revokeObjectURL(old.audioUrl);
     preloadCacheRef.current.set(q.id, { phrased: text, audioUrl });
@@ -1042,8 +1101,14 @@ export function RespondentFlow({
   }
 
   async function preloadAll(activeSessionId: string, activeName: string | null) {
-    if (preloadStartedRef.current) return;
+    if (preloadStartedRef.current && preloadNameRef.current === activeName) return;
+    if (preloadNameRef.current !== activeName) {
+      preloadCacheRef.current.forEach(({ audioUrl }) => URL.revokeObjectURL(audioUrl));
+      preloadCacheRef.current.clear();
+      preloadStartedRef.current = false;
+    }
     preloadStartedRef.current = true;
+    preloadNameRef.current = activeName;
     setPreloadProgress(0);
     setPreloadError(false);
 
@@ -1150,6 +1215,7 @@ export function RespondentFlow({
 
   async function handleStart() {
     playTick();
+    setMusicActive(true);
     try {
       const res = await fetch("/api/sessions", {
         method: "POST",
@@ -1374,7 +1440,8 @@ export function RespondentFlow({
       <button
         onClick={toggleMute}
         className="fixed top-4 right-4 z-50 flex items-center justify-center w-9 h-9 rounded-full bg-background/80 backdrop-blur border border-border shadow-sm hover:bg-muted transition-colors"
-        aria-label={muted ? "Unmute voice" : "Mute voice"}
+        aria-label={muted ? "Unmute" : "Mute"}
+        title={muted ? "Unmute" : "Mute"}
       >
         {muted ? (
           <VolumeX className="h-4 w-4 text-muted-foreground" />
@@ -1382,6 +1449,12 @@ export function RespondentFlow({
           <Volume2 className="h-4 w-4 text-muted-foreground" />
         )}
       </button>
+
+      <BackgroundMusic
+        active={musicActive}
+        ducking={isSpeaking}
+        muted={muted}
+      />
 
       {/* ── Left: AI presence (40% desktop, top banner mobile) ── */}
       <div

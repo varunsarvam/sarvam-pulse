@@ -59,7 +59,14 @@ export async function POST(req: NextRequest) {
     }
 
     const cacheKey = session_id
-      ? JSON.stringify({ session_id, question_prompt, tone, form_intent })
+      ? JSON.stringify({
+          session_id,
+          question_prompt,
+          tone,
+          form_intent,
+          respondent_name:
+            typeof respondent_name === "string" ? respondent_name.trim() : null,
+        })
       : null;
 
     // ── Cache hit → instant JSON (no streaming overhead) ──
@@ -93,7 +100,7 @@ Good rewrites:
       ``,
       `Tone: ${tone}.${form_intent ? ` Form intent: ${form_intent}.` : ""}`,
       typeof respondent_name === "string" && respondent_name.trim()
-        ? `The respondent's name is ${respondent_name.trim()}. You may occasionally address them by name when it feels natural — sparingly, not every question. Don't force it; if a question doesn't naturally invite a name, skip it.`
+        ? `The respondent's name is ${respondent_name.trim()}. Use their name naturally when it adds warmth, especially early in the conversation. Still be sparing; don't force it into every question.`
         : "",
       ``,
       `Hard rules:`,
