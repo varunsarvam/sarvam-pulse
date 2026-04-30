@@ -27,10 +27,10 @@ interface ReflectionProps {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const REACTIONS = [
-  { key: "fire", emoji: "🔥" },
-  { key: "eyes", emoji: "👀" },
-  { key: "hundred", emoji: "💯" },
-  { key: "thinking", emoji: "🤔" },
+  { key: "love",      emoji: "❤️" },
+  { key: "fire",      emoji: "🔥" },
+  { key: "mindblown", emoji: "🤯" },
+  { key: "haha",      emoji: "😂" },
 ] as const;
 
 const CONTINUE_READY_MS = 5000;
