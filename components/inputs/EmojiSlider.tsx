@@ -11,69 +11,31 @@ interface EmojiSliderProps {
   disabled?: boolean;
 }
 
-// ─── Steps ────────────────────────────────────────────────────────────────────
-// Noto Animated Emoji CDN: fonts.gstatic.com/s/e/notoemoji/latest/{hex}/lottie.json
+// ─── 6 steps — clean spectrum, 3×2 grid ──────────────────────────────────────
 
-const STEPS: { at: number; hex: string; label: string }[] = [
-  { at: 0,   hex: "1f62d", label: "Strongly disagree" },
-  { at: 17,  hex: "1f614", label: "Disagree"          },
-  { at: 33,  hex: "1fae4", label: "Not sure"          },
-  { at: 50,  hex: "1f610", label: "Neutral"           },
-  { at: 67,  hex: "1f642", label: "Agree"             },
-  { at: 83,  hex: "1f60a", label: "Strongly agree"    },
-  { at: 100, hex: "1f604", label: "Absolutely!"       },
-];
+const STEPS = [
+  { value: 0,   hex: "1f621", label: "Strongly disagree", bg: "rgba(239,68,68,0.10)",   ring: "#ef4444" },
+  { value: 20,  hex: "1f61e", label: "Disagree",          bg: "rgba(249,115,22,0.10)",  ring: "#f97316" },
+  { value: 40,  hex: "1f615", label: "Not sure",          bg: "rgba(234,179,8,0.10)",   ring: "#eab308" },
+  { value: 60,  hex: "1f642", label: "Agree",             bg: "rgba(132,204,22,0.10)",  ring: "#84cc16" },
+  { value: 80,  hex: "1f60a", label: "Strongly agree",    bg: "rgba(34,197,94,0.10)",   ring: "#22c55e" },
+  { value: 100, hex: "1f929", label: "Absolutely!",       bg: "rgba(16,185,129,0.14)",  ring: "#10b981" },
+] as const;
 
 function notoUrl(hex: string) {
   return `https://fonts.gstatic.com/s/e/notoemoji/latest/${hex}/lottie.json`;
 }
 
-function getStep(value: number) {
-  return STEPS.reduce((best, s) =>
-    Math.abs(s.at - value) < Math.abs(best.at - value) ? s : best
-  );
-}
+// ─── Card ─────────────────────────────────────────────────────────────────────
 
-function gradientColor(pct: number): string {
-  const stops = [
-    { p: 0,   r: 239, g: 68,  b: 68  },
-    { p: 50,  r: 234, g: 179, b: 8   },
-    { p: 100, r: 34,  g: 197, b: 94  },
-  ];
-  let lo = stops[0], hi = stops[stops.length - 1];
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (pct >= stops[i].p && pct <= stops[i + 1].p) {
-      lo = stops[i]; hi = stops[i + 1]; break;
-    }
-  }
-  const t = lo.p === hi.p ? 0 : (pct - lo.p) / (hi.p - lo.p);
-  return `rgb(${Math.round(lo.r + (hi.r - lo.r) * t)},${Math.round(lo.g + (hi.g - lo.g) * t)},${Math.round(lo.b + (hi.b - lo.b) * t)})`;
-}
-
-// ─── Animated emoji with Lottie ───────────────────────────────────────────────
-
-function AnimatedEmoji({ hex, size = 96 }: { hex: string; size?: number }) {
-  const url = notoUrl(hex);
-  return (
-    <Lottie
-      path={url}
-      style={{ width: size, height: size }}
-      loop
-      autoplay
-    />
-  );
-}
-
-// ─── Marker button with hover tooltip ─────────────────────────────────────────
-
-function EmojiMarker({
+function EmojiCard({
   step,
-  active,
+  selected,
   disabled,
   onClick,
 }: {
-  step: typeof STEPS[0];
-  active: boolean;
+  step: typeof STEPS[number];
+  selected: boolean;
   disabled: boolean;
   onClick: () => void;
 }) {
@@ -83,13 +45,13 @@ function EmojiMarker({
     <div className="relative flex flex-col items-center">
       {/* Tooltip */}
       <AnimatePresence>
-        {hovered && (
+        {hovered && !selected && (
           <motion.div
-            className="absolute -top-9 z-20 whitespace-nowrap rounded-full bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white shadow-lg"
-            initial={{ opacity: 0, y: 4, scale: 0.9 }}
+            className="absolute -top-10 z-20 whitespace-nowrap rounded-full bg-zinc-900 px-3 py-1 text-[11px] font-semibold text-white shadow-lg"
+            initial={{ opacity: 0, y: 4, scale: 0.88 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.9 }}
-            transition={{ duration: 0.15 }}
+            exit={{ opacity: 0, y: 4, scale: 0.88 }}
+            transition={{ duration: 0.14 }}
           >
             {step.label}
             <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
@@ -100,114 +62,109 @@ function EmojiMarker({
       <motion.button
         type="button"
         disabled={disabled}
+        onClick={onClick}
         onHoverStart={() => setHovered(true)}
         onHoverEnd={() => setHovered(false)}
-        onClick={onClick}
-        animate={{ opacity: active ? 1 : 0.3, scale: active ? 1.15 : 1 }}
-        whileHover={{ scale: active ? 1.2 : 1.15, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 400, damping: 22 }}
-        className="disabled:pointer-events-none"
+        animate={{
+          scale: selected ? 1.08 : hovered ? 1.05 : 1,
+          backgroundColor: selected ? step.bg : "rgba(255,255,255,1)",
+        }}
+        whileTap={{ scale: 0.94 }}
+        transition={{ type: "spring", stiffness: 380, damping: 22 }}
+        className="relative flex h-[88px] w-full flex-col items-center justify-center overflow-hidden rounded-2xl border disabled:pointer-events-none"
+        style={{
+          borderColor: selected ? step.ring : "#e4e4e7",
+          boxShadow: selected ? `0 0 0 1.5px ${step.ring}40` : undefined,
+        }}
       >
-        <AnimatedEmoji hex={step.hex} size={32} />
+        {/* Emoji */}
+        <motion.div
+          animate={{ scale: selected ? 1.15 : 1 }}
+          transition={{ type: "spring", stiffness: 360, damping: 20 }}
+        >
+          <Lottie
+            path={notoUrl(step.hex)}
+            style={{ width: 52, height: 52 }}
+            loop
+            autoplay
+          />
+        </motion.div>
+
+        {/* Label — only on selected */}
+        <AnimatePresence>
+          {selected && (
+            <motion.span
+              className="absolute bottom-2 text-[10px] font-semibold"
+              style={{ color: step.ring }}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.18 }}
+            >
+              {step.label}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </motion.button>
     </div>
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSliderProps) {
-  const [value, setValue] = useState(50);
+  const [selected, setSelected] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   void question;
 
-  const step = getStep(value);
-  const thumbColor = gradientColor(value);
-
-  function jumpTo(at: number) {
-    setValue(at);
+  function handlePick(value: number) {
+    if (disabled || submitted) return;
+    setSelected(value);
   }
 
   function handleSubmit() {
-    if (disabled || submitted) return;
+    if (disabled || submitted || selected === null) return;
     setSubmitted(true);
-    onSubmit({ type: "emoji_slider", value });
+    onSubmit({ type: "emoji_slider", value: selected });
   }
 
-  const emojiScale = 1 + (Math.abs(value - 50) / 50) * 0.25;
-
   return (
-    <div className="flex w-full flex-col items-center gap-5 py-4">
+    <div className="flex w-full flex-col gap-5 py-2">
 
-      {/* ── Big animated emoji ── */}
-      <motion.div
-        className="relative flex items-center justify-center"
-        animate={{ scale: emojiScale }}
-        transition={{ type: "spring", stiffness: 200, damping: 20 }}
-      >
-        {/* Soft glow */}
-        <motion.div
-          className="absolute inset-0 rounded-full blur-2xl"
-          animate={{
-            backgroundColor: thumbColor,
-            opacity: 0.15,
-            scale: 1.1,
-          }}
-          transition={{ duration: 0.3 }}
-        />
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step.hex}
-            initial={{ scale: 0.5, rotate: -15, opacity: 0 }}
-            animate={{ scale: 1, rotate: 0, opacity: 1 }}
-            exit={{ scale: 0.5, rotate: 15, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 380, damping: 18 }}
-          >
-            <AnimatedEmoji hex={step.hex} size={100} />
-          </motion.div>
-        </AnimatePresence>
-      </motion.div>
-
-      {/* ── Label tooltip ── */}
-      <AnimatePresence mode="wait">
-        <motion.span
-          key={step.label}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.18 }}
-          className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold tracking-wide text-white"
-        >
-          {step.label}
-        </motion.span>
-      </AnimatePresence>
-
-      {/* ── Emoji step markers ── */}
-      <div className="flex w-full justify-between px-3">
+      {/* ── 3×2 grid ── */}
+      <div className="grid grid-cols-3 gap-3">
         {STEPS.map((s) => (
-          <EmojiMarker
-            key={s.at}
+          <EmojiCard
+            key={s.value}
             step={s}
-            active={step.at === s.at}
+            selected={selected === s.value}
             disabled={disabled || submitted}
-            onClick={() => jumpTo(s.at)}
+            onClick={() => handlePick(s.value)}
           />
         ))}
       </div>
 
       {/* ── Confirm ── */}
-      <motion.button
-        onClick={handleSubmit}
-        disabled={disabled || submitted}
-        whileHover={!submitted ? { scale: 1.03 } : {}}
-        whileTap={!submitted ? { scale: 0.97 } : {}}
-        className="group relative isolate mt-1 h-12 overflow-hidden rounded-full bg-[#111820] px-10 text-sm font-medium text-white transition-transform hover:bg-[#0b1118] disabled:opacity-45"
-      >
-        <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%)]" />
-        <span className="pointer-events-none absolute -left-12 top-0 h-full w-12 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-48" />
-        <span className="relative z-10">{submitted ? "✓" : "Confirm"}</span>
-      </motion.button>
+      <AnimatePresence>
+        {selected !== null && (
+          <motion.button
+            onClick={handleSubmit}
+            disabled={disabled || submitted}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 340, damping: 24 }}
+            className="group relative isolate mx-auto flex h-11 items-center justify-center overflow-hidden rounded-full bg-[#111820] px-10 text-sm font-medium text-white hover:bg-[#0b1118] disabled:opacity-45"
+          >
+            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%)]" />
+            <span className="pointer-events-none absolute -left-12 top-0 h-full w-12 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-48" />
+            <span className="relative z-10">{submitted ? "✓" : "Confirm"}</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
