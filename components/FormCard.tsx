@@ -5,7 +5,6 @@ import { Check, Copy } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import type { Form, FormTone } from "@/lib/types";
 
 interface FormCardProps {
@@ -15,11 +14,11 @@ interface FormCardProps {
   index: number;
 }
 
-const TONE_BADGE: Record<FormTone, string> = {
-  playful: "bg-orange-500/10 text-orange-500 ring-orange-500/20",
-  calm: "bg-blue-500/10 text-blue-500 ring-blue-500/20",
-  direct: "bg-zinc-500/10 text-zinc-500 ring-zinc-500/20",
-  insightful: "bg-violet-500/10 text-violet-500 ring-violet-500/20",
+const TONE_BG: Record<FormTone, string> = {
+  playful:   "#E8451A",
+  calm:      "#2233CC",
+  direct:    "#1A6B58",
+  insightful:"#5B2A8E",
 };
 
 async function copyText(text: string): Promise<void> {
@@ -27,7 +26,6 @@ async function copyText(text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
     return;
   }
-
   const textarea = document.createElement("textarea");
   textarea.value = text;
   textarea.style.position = "fixed";
@@ -46,7 +44,9 @@ export function FormCard({
 }: FormCardProps) {
   const [copied, setCopied] = useState(false);
 
-  async function handleCopy() {
+  async function handleCopy(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
     const url = `${window.location.origin}/respond/${form.id}`;
     try {
       await copyText(url);
@@ -58,59 +58,109 @@ export function FormCard({
     }
   }
 
+  const bg = TONE_BG[form.tone];
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.08, ease: "easeOut" }}
-      whileHover={{ y: -4 }}
-      className="group flex min-h-[260px] flex-col justify-between rounded-3xl border border-border bg-card/70 p-6 shadow-sm transition-shadow hover:border-foreground/15 hover:shadow-xl"
+      whileHover={{ scale: 1.015, y: -2 }}
+      className="relative flex min-h-[260px] cursor-pointer flex-col overflow-hidden rounded-2xl p-5 shadow-lg"
+      style={{ background: bg }}
     >
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <span
+          className="font-mono text-[9px] uppercase tracking-[0.2em]"
+          style={{ color: "rgba(255,255,255,0.55)" }}
+        >
+          {form.tone}
+        </span>
+        <span
+          className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider"
+          style={{ color: "rgba(255,255,255,0.55)" }}
+        >
           <span
-            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${TONE_BADGE[form.tone]}`}
-          >
-            {form.tone}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {form.status}
-          </span>
-        </div>
+            className="h-1.5 w-1.5 rounded-full"
+            style={{
+              background:
+                form.status === "published"
+                  ? "rgba(255,255,255,0.7)"
+                  : "rgba(255,255,255,0.35)",
+            }}
+          />
+          {form.status}
+        </span>
+      </div>
 
-        <div className="space-y-2">
-          <h2 className="line-clamp-2 text-xl font-medium leading-snug tracking-tight">
-            {form.title}
-          </h2>
-          <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-            {form.intent || "No intent added yet."}
+      {/* Title */}
+      <h2
+        className="mt-4 text-4xl leading-[1.05] tracking-tight text-white"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        {form.title}
+      </h2>
+
+      {/* Spacer */}
+      <div className="min-h-[20px] flex-1" />
+
+      {/* Stats row */}
+      <div className="mb-3 flex items-end justify-between">
+        <div>
+          <p className="font-mono text-base font-bold leading-none text-white">
+            {responseCount}
+          </p>
+          <p
+            className="mt-0.5 font-mono text-[9px] uppercase tracking-widest"
+            style={{ color: "rgba(255,255,255,0.55)" }}
+          >
+            responses
           </p>
         </div>
-
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span>{responseCount} response{responseCount === 1 ? "" : "s"}</span>
-          <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-          <span>{completedCount} completed</span>
+        <div className="text-right">
+          <p className="font-mono text-base font-bold leading-none text-white">
+            {completedCount}
+          </p>
+          <p
+            className="mt-0.5 font-mono text-[9px] uppercase tracking-widest"
+            style={{ color: "rgba(255,255,255,0.55)" }}
+          >
+            completed
+          </p>
         </div>
       </div>
 
-      <div className="mt-8 flex items-center gap-3">
-        <Button asChild className="flex-1">
-          <Link href={`/respond/${form.id}`}>Open form →</Link>
-        </Button>
-        <Button
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        <Link
+          href={`/respond/${form.id}`}
+          className="flex flex-1 items-center justify-center rounded-xl py-2.5 text-xs font-semibold text-white transition-all hover:brightness-110"
+          style={{
+            background: "rgba(255,255,255,0.18)",
+            backdropFilter: "blur(16px)",
+            border: "1px solid rgba(255,255,255,0.28)",
+          }}
+        >
+          Open form →
+        </Link>
+        <button
           type="button"
-          variant="outline"
           onClick={handleCopy}
-          className="gap-2"
+          aria-label="Copy link"
+          className="flex h-[38px] w-[38px] items-center justify-center rounded-xl transition-all hover:brightness-110"
+          style={{
+            background: "rgba(255,255,255,0.18)",
+            backdropFilter: "blur(16px)",
+            border: "1px solid rgba(255,255,255,0.28)",
+          }}
         >
           {copied ? (
-            <Check className="h-4 w-4" />
+            <Check className="h-3.5 w-3.5 text-white" />
           ) : (
-            <Copy className="h-4 w-4" />
+            <Copy className="h-3.5 w-3.5 text-white" />
           )}
-          {copied ? "Copied!" : "Copy link"}
-        </Button>
+        </button>
       </div>
     </motion.article>
   );

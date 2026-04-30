@@ -33,6 +33,8 @@ function LoadingShimmer() {
         <StaticRadialGradient
           width={CARD_W}
           height={CARD_H}
+          scale={0.45}
+          offsetY={-0.16}
           colors={[...SHADER_COLORS]}
           colorBack={SHADER_BACK}
           radius={1}
@@ -77,6 +79,8 @@ export function CompleteStage({
 }) {
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [identityError, setIdentityError] = useState<string | null>(null);
+  const [retryAttempts, setRetryAttempts] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const [respondentName, setRespondentName] = useState<string | null>(null);
 
   // Shader focal state — updated by RAF lerp so React re-renders stay at ≤60fps
@@ -93,40 +97,55 @@ export function CompleteStage({
   const fetchedRef = useRef(false);
 
   // ── Fetch identity ─────────────────────────────────────────────────────────
+  // Phase 5 architectural decision: NO fallback identity. On error we surface
+  // a real error state with a retry button. Same endpoint, same call — this is
+  // safe because /api/complete-session is idempotent (the sessions row gets
+  // overwritten with the new identity_label/summary on success).
+
+  async function fetchIdentity(isRetry: boolean) {
+    if (!sessionId) return;
+    if (isRetry) {
+      setRetrying(true);
+      setIdentityError(null);
+    }
+    try {
+      const res = await fetch("/api/complete-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+        } | null;
+        throw new Error(
+          body?.message ?? body?.error ?? `status ${res.status}`
+        );
+      }
+      const data = (await res.json()) as {
+        identity: Identity;
+        respondent_name?: string | null;
+      };
+      setIdentity(data.identity);
+      setRespondentName(data.respondent_name ?? null);
+      setIdentityError(null);
+    } catch (e) {
+      console.error("[complete-session]:", e);
+      const msg =
+        e instanceof Error ? e.message : "Identity unavailable";
+      setIdentityError(msg);
+      if (isRetry) setRetryAttempts((n) => n + 1);
+    } finally {
+      if (isRetry) setRetrying(false);
+    }
+  }
 
   useEffect(() => {
     if (fetchedRef.current || !sessionId) return;
     fetchedRef.current = true;
-
-    fetch("/api/complete-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          // Phase 5: NO fallback identity. If classification failed (502) or
-          // anything else went wrong, surface the error so the user can retry.
-          // TODO(phase-6): proper error UX with retry button.
-          const body = (await res.json().catch(() => null)) as {
-            error?: string;
-            message?: string;
-          } | null;
-          throw new Error(
-            body?.message ?? body?.error ?? `status ${res.status}`
-          );
-        }
-        const data = (await res.json()) as {
-          identity: Identity;
-          respondent_name?: string | null;
-        };
-        setIdentity(data.identity);
-        setRespondentName(data.respondent_name ?? null);
-      })
-      .catch((e: Error) => {
-        console.error("[complete-session]:", e);
-        setIdentityError(e.message ?? "Identity unavailable");
-      });
+    void fetchIdentity(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   // ── 3D tilt + shader focal tracking ───────────────────────────────────────
@@ -216,18 +235,64 @@ export function CompleteStage({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (identityError) {
-    // TODO(phase-6): replace with a designed error state (retry button, etc.).
-    // For now, render a plain text fallback rather than loop on the shimmer.
+    // Designed error state — dark surface that mirrors the identity card's
+    // weight, with a retry button. After 2 retry attempts we drop the button:
+    // if Sarvam is persistently down, hammering the endpoint isn't helpful and
+    // the user has a clear next step ("come back in a bit").
+    const canRetry = retryAttempts < 2;
     return (
-      <div className="flex h-full w-full items-center justify-center px-8">
-        <div className="max-w-md text-center text-white/80">
-          <p className="text-lg font-medium">
-            We couldn&apos;t generate your identity right now.
-          </p>
-          <p className="mt-3 text-sm text-white/55">
-            Please try again in a moment.
-          </p>
-        </div>
+      <div className="flex h-full w-full items-center justify-center px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-[#141821] p-7 text-white"
+          style={{
+            boxShadow:
+              "0 60px 120px rgba(0,0,0,0.32), 0 14px 40px rgba(0,0,0,0.18), inset 0 0 0 1px rgba(255,255,255,0.06)",
+          }}
+        >
+          {/* Soft warm glow so it doesn't read as "broken" */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(241,90,34,0.10),transparent_70%)]" />
+          <div className="relative z-10 flex flex-col gap-5">
+            <div className="flex items-center gap-2">
+              <div
+                className="h-2.5 w-2.5 rounded-full bg-white/80"
+                style={{ boxShadow: "0 0 12px rgba(255,255,255,0.45)" }}
+              />
+              <span className="font-matter text-xs font-medium uppercase tracking-widest text-white/70">
+                Pulse
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <h2 className="font-display text-[1.65rem] leading-tight tracking-tight text-white">
+                {canRetry
+                  ? "We couldn’t capture your identity this time."
+                  : "Still no luck."}
+              </h2>
+              <p className="font-matter text-sm leading-relaxed text-white/70">
+                {canRetry
+                  ? "Sarvam was busy when we asked. Your answers are saved — give it another moment and try again."
+                  : "Sarvam isn’t responding right now. Come back in a bit and we’ll finish this for you."}
+              </p>
+            </div>
+
+            {canRetry && (
+              <button
+                type="button"
+                onClick={() => void fetchIdentity(true)}
+                disabled={retrying}
+                className="font-matter group relative isolate mt-2 flex h-11 items-center justify-center self-start overflow-hidden rounded-full bg-white px-6 text-sm font-medium text-[#141821] transition-transform hover:scale-[1.03] disabled:opacity-50"
+              >
+                <span className="pointer-events-none absolute -left-12 top-0 h-full w-12 -skew-x-12 bg-black/10 blur-md transition-transform duration-700 group-hover:translate-x-48" />
+                <span className="relative z-10">
+                  {retrying ? "Trying again…" : "Try again"}
+                </span>
+              </button>
+            )}
+          </div>
+        </motion.div>
       </div>
     );
   }
@@ -267,6 +332,7 @@ export function CompleteStage({
               width={CARD_W}
               height={CARD_H}
               scale={0.45}
+              offsetY={-0.16}
               colors={[...SHADER_COLORS]}
               colorBack={SHADER_BACK}
               radius={1}
@@ -313,26 +379,33 @@ export function CompleteStage({
             </div>
 
             {/* Middle: identity */}
-            <div className="flex flex-col gap-3">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/60">
-                {respondentName ? `${respondentName} is` : "I am"}
-              </p>
-              <h2 className="text-3xl font-bold leading-[1.1] tracking-tight text-white">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <h2
+                className="text-3xl font-bold leading-[1.1] tracking-tight text-white"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
                 {identity.label}
               </h2>
-              <p className="max-w-[230px] text-xs leading-relaxed text-white/80">
+              <p
+                className="w-full text-[11px] leading-snug text-white/70"
+                style={{
+                  overflow: "hidden",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                }}
+              >
                 {identity.summary}
               </p>
             </div>
 
-            {/* Bottom: footer */}
-            <div className="flex items-end justify-between">
-              <p className="max-w-[160px] text-[10px] uppercase leading-tight tracking-wider text-white/45">
-                Sarvam Pulse
-              </p>
-              <span className="font-mono text-[10px] text-white/55">
-                pulse.sarvam.ai
-              </span>
+            {/* Bottom: respondent name if available */}
+            <div className="flex items-end justify-center">
+              {respondentName && (
+                <span className="font-mono text-[10px] text-white/45">
+                  {respondentName}
+                </span>
+              )}
             </div>
           </div>
         </motion.div>
