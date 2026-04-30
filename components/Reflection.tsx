@@ -29,8 +29,9 @@ interface ReflectionProps {
 const REACTIONS = [
   { key: "love",      emoji: "❤️" },
   { key: "fire",      emoji: "🔥" },
+  { key: "hundred",   emoji: "💯" },
+  { key: "thumbsup",  emoji: "👍" },
   { key: "mindblown", emoji: "🤯" },
-  { key: "haha",      emoji: "😂" },
 ] as const;
 
 const CONTINUE_READY_MS = 5000;
