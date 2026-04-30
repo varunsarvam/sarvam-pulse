@@ -523,7 +523,7 @@ export function Reflection({
     }
 
     // Advance after the emoji pop animation settles
-    setTimeout(() => advance(), 900);
+    setTimeout(() => advance(), 350);
   }
 
   const { type, copy, payload } = reflection;

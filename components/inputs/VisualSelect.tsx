@@ -141,7 +141,7 @@ export function VisualSelect({
   function pick(label: string) {
     if (disabled || selected !== null) return;
     setSelected(label);
-    setTimeout(() => onSubmit({ type: "visual_select", value: label }), 400);
+    setTimeout(() => onSubmit({ type: "visual_select", value: label }), 80);
   }
 
   return (
