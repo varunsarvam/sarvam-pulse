@@ -121,8 +121,14 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
   const hex = BUCKET_HEX[bucket];
 
   return (
-    // overflow-hidden clips particles: enter from bottom edge, exit through top edge
-    <div className="relative w-full overflow-hidden" style={{ minHeight: 380 }}>
+    <div
+      className="relative w-full overflow-hidden"
+      style={{
+        minHeight: 380,
+        maskImage: "linear-gradient(to top, black 0%, black 60%, transparent 100%)",
+        WebkitMaskImage: "linear-gradient(to top, black 0%, black 60%, transparent 100%)",
+      }}
+    >
 
       {!hideHeadline && (
         <motion.h2
@@ -167,10 +173,9 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
         ))}
       </div>
 
-      {/* Big animated Lottie emoji — user's answer position */}
+      {/* Big animated Lottie emoji — centered */}
       <motion.div
-        className="absolute left-1/2 z-10 -translate-x-1/2"
-        style={{ bottom: `${clamp(8 + value * 0.55, 8, 68)}%` }}
+        className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
         initial={{ opacity: 0, scale: 0.4 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.3, duration: 0.55, type: "spring", bounce: 0.4 }}
