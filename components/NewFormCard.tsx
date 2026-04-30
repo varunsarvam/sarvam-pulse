@@ -4,12 +4,12 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 
 const STRIPES = [
-  { color: "#16a34a", height: 80 }, // green  — tallest, bottom
-  { color: "#2563eb", height: 66 }, // blue
-  { color: "#ca8a04", height: 52 }, // amber
-  { color: "#ea580c", height: 38 }, // orange
-  { color: "#dc2626", height: 26 }, // red
-  { color: "#db2777", height: 16 }, // pink   — shortest, top
+  { color: "#16a34a", height: 48 }, // green  — tallest, bottom
+  { color: "#2563eb", height: 40 }, // blue
+  { color: "#ca8a04", height: 31 }, // amber
+  { color: "#ea580c", height: 23 }, // orange
+  { color: "#dc2626", height: 16 }, // red
+  { color: "#db2777", height: 10 }, // pink   — shortest, top
 ];
 
 export function NewFormCard({ index }: { index: number }) {
@@ -22,7 +22,7 @@ export function NewFormCard({ index }: { index: number }) {
     >
       <Link
         href="/create"
-        className="relative flex aspect-[3/4] cursor-pointer flex-col overflow-hidden rounded-2xl shadow-sm"
+        className="relative flex aspect-[3/4] cursor-pointer flex-col overflow-hidden rounded-xl shadow-sm"
         style={{ background: "#f5f4f0" }}
       >
         {/* Grain texture overlay */}
@@ -40,7 +40,7 @@ export function NewFormCard({ index }: { index: number }) {
         <div className="flex flex-1 items-center justify-center pb-10">
           <span
             className="select-none font-bold leading-none text-black/15"
-            style={{ fontSize: "96px", lineHeight: 1 }}
+            style={{ fontSize: "58px", lineHeight: 1 }}
           >
             +
           </span>

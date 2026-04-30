@@ -47,7 +47,7 @@ export default async function Home() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
-        <section className="flex flex-wrap justify-center gap-5 [&>*]:w-full [&>*]:max-w-[300px]">
+        <section className="flex flex-wrap justify-center gap-4 [&>*]:w-full [&>*]:max-w-[180px]">
           {forms.map((form, index) => {
             const count = counts.get(form.id) ?? {
               responseCount: 0,

@@ -70,7 +70,7 @@ export function FormCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.08, ease: "easeOut" }}
       whileHover={{ scale: 1.015, y: -2 }}
-      className="relative flex aspect-[3/4] cursor-pointer flex-col overflow-hidden rounded-2xl p-5 shadow-lg"
+      className="relative flex aspect-[3/4] cursor-pointer flex-col overflow-hidden rounded-xl p-3 shadow-lg"
       style={{ background: bg }}
     >
 
@@ -87,34 +87,34 @@ export function FormCard({
 
       {/* Title */}
       <h2
-        className="mt-4 text-4xl leading-[1.05] tracking-tight text-white"
+        className="mt-2.5 text-xl leading-[1.05] tracking-tight text-white"
         style={{ fontFamily: "var(--font-display)" }}
       >
         {form.title}
       </h2>
 
       {/* Spacer */}
-      <div className="min-h-[20px] flex-1" />
+      <div className="min-h-[10px] flex-1" />
 
       {/* Stats row */}
-      <div className="mb-3 flex items-end justify-between">
+      <div className="mb-2 flex items-end justify-between">
         <div>
-          <p className="font-mono text-base font-bold leading-none text-white">
+          <p className="font-mono text-xs font-bold leading-none text-white">
             {responseCount}
           </p>
           <p
-            className="mt-0.5 font-mono text-[9px] uppercase tracking-widest"
+            className="mt-0.5 font-mono text-[6px] uppercase tracking-widest"
             style={{ color: "rgba(255,255,255,0.55)" }}
           >
             responses
           </p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-base font-bold leading-none text-white">
+          <p className="font-mono text-xs font-bold leading-none text-white">
             {completedCount}
           </p>
           <p
-            className="mt-0.5 font-mono text-[9px] uppercase tracking-widest"
+            className="mt-0.5 font-mono text-[6px] uppercase tracking-widest"
             style={{ color: "rgba(255,255,255,0.55)" }}
           >
             completed
@@ -123,23 +123,23 @@ export function FormCard({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Link
           href={`/respond/${form.id}`}
-          className="flex flex-1 items-center justify-center rounded-2xl py-3 text-sm font-semibold text-white transition-all hover:brightness-110"
+          className="flex flex-1 items-center justify-center rounded-lg py-1.5 text-[10px] font-semibold text-white transition-all hover:brightness-110"
           style={{
             background: "rgba(0,0,0,0.22)",
             backdropFilter: "blur(20px)",
             border: "1px solid rgba(255,255,255,0.14)",
           }}
         >
-          Open form →
+          Open →
         </Link>
         <button
           type="button"
           onClick={handleCopy}
           aria-label="Copy link"
-          className="flex h-[46px] w-[46px] items-center justify-center rounded-2xl transition-all hover:brightness-110"
+          className="flex h-[26px] w-[26px] items-center justify-center rounded-lg transition-all hover:brightness-110"
           style={{
             background: "rgba(0,0,0,0.22)",
             backdropFilter: "blur(20px)",
@@ -147,9 +147,9 @@ export function FormCard({
           }}
         >
           {copied ? (
-            <Check className="h-3.5 w-3.5 text-white" />
+            <Check className="h-2 w-2 text-white" />
           ) : (
-            <Copy className="h-3.5 w-3.5 text-white" />
+            <Copy className="h-2 w-2 text-white" />
           )}
         </button>
       </div>
