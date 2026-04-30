@@ -16,15 +16,15 @@ interface OptionColumn {
 
 // ── Layout / palette ─────────────────────────────────────────────────────────
 
-const MAX_ROWS = 12;
-const DOT_STEP = 18;
-const DOT_SIZE = 14;
-const MARKER_SIZE = 18;
-const COL_HEIGHT = MAX_ROWS * DOT_STEP + DOT_SIZE * 2 + 20;
+const MAX_ROWS = 16;
+const DOT_STEP = 16;
+const DOT_SIZE = 12;
+const COL_HEIGHT = MAX_ROWS * DOT_STEP + DOT_SIZE * 2 + 16;
 
-const ORANGE = "#FF8C42";
-const ORANGE_LABEL = "#C56F2E";
-const GREY = "#D8D8DC";
+// Terracotta orange matching reference image
+const ORANGE = "#E04D18";
+const ORANGE_LABEL = "#B83D10";
+const GREY = "#DCDCE0";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,13 +56,16 @@ function shortLabel(label: string): string {
   return label.length > 26 ? `${label.slice(0, 23)}...` : label;
 }
 
-function dotPosition(index: number) {
+// Properly centered: sub-columns are distributed symmetrically around 50%
+function dotPosition(index: number, totalCount: number) {
   const row = index % MAX_ROWS;
   const col = Math.floor(index / MAX_ROWS);
+  const totalCols = Math.max(1, Math.ceil(totalCount / MAX_ROWS));
+  // Center all sub-columns: offset from center = (col - (totalCols-1)/2) * DOT_STEP
+  const offset = (col - (totalCols - 1) / 2) * DOT_STEP;
   return {
     bottom: row * DOT_STEP,
-    left: `calc(50% + ${(col - 1) * DOT_STEP}px - ${DOT_SIZE / 2}px)`,
-    col,
+    left: `calc(50% + ${offset}px - ${DOT_SIZE / 2}px)`,
   };
 }
 
@@ -89,12 +92,10 @@ export function ReflectionDistribution({
       )}
 
       <div
-        className={`${hideHeadline ? "" : "mt-12"} flex w-full max-w-3xl items-end justify-center gap-7`}
+        className={`${hideHeadline ? "" : "mt-12"} flex w-full max-w-4xl items-end justify-center gap-10`}
       >
         {columns.map((column, columnIndex) => {
           const dots = Array.from({ length: column.count });
-          const userDot = dotPosition(column.count);
-          const markerColOffset = (userDot.col - 1) * DOT_STEP;
 
           return (
             <div
@@ -102,14 +103,13 @@ export function ReflectionDistribution({
               className="flex min-w-0 flex-1 flex-col items-center gap-5"
             >
               <div
-                className="relative w-full max-w-[140px]"
+                className="relative w-full max-w-[220px]"
                 style={{ height: COL_HEIGHT }}
               >
-                {/* Solid filled dots — Bauhaus grid */}
                 {dots.map((_, dotIndex) => {
-                  const pos = dotPosition(dotIndex);
-                  const baseDelay = column.isChosen ? 0.55 : columnIndex * 0.05;
-                  const span = column.isChosen ? 0.55 : 0.4;
+                  const pos = dotPosition(dotIndex, column.count);
+                  const baseDelay = column.isChosen ? 0.45 : columnIndex * 0.06;
+                  const span = 0.5;
                   const delay =
                     baseDelay +
                     (dotIndex / Math.max(1, column.count)) * span;
@@ -125,90 +125,41 @@ export function ReflectionDistribution({
                         left: pos.left,
                         background: column.isChosen ? ORANGE : GREY,
                       }}
-                      initial={{ opacity: 0, scale: 0.4, y: 4 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      initial={{ opacity: 0, scale: 0.4 }}
+                      animate={{ opacity: 1, scale: 1 }}
                       transition={{
                         delay,
-                        duration: 0.32,
+                        duration: 0.28,
                         ease: "easeOut",
                       }}
                     />
                   );
                 })}
-
-                {/* "You are here" marker */}
-                {column.isChosen && (
-                  <motion.div
-                    className="absolute"
-                    style={{
-                      width: MARKER_SIZE,
-                      height: MARKER_SIZE,
-                      bottom: userDot.bottom + 6,
-                      left: `calc(50% + ${markerColOffset}px - ${MARKER_SIZE / 2}px)`,
-                    }}
-                    initial={{ opacity: 0, scale: 0.2, y: -12 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    transition={{
-                      delay: 1.4,
-                      duration: 0.5,
-                      type: "spring",
-                      bounce: 0.5,
-                    }}
-                  >
-                    {/* Continuous expanding halo ring */}
-                    <motion.span
-                      className="pointer-events-none absolute inset-0 rounded-full"
-                      animate={{
-                        boxShadow: [
-                          "0 0 0 0 rgba(255, 140, 66, 0.5)",
-                          "0 0 0 10px rgba(255, 140, 66, 0)",
-                        ],
-                      }}
-                      transition={{
-                        duration: 2.2,
-                        repeat: Infinity,
-                        ease: "easeOut",
-                        delay: 1.9,
-                      }}
-                    />
-                    {/* Solid orange core with subtle white inner highlight */}
-                    <span
-                      className="absolute inset-0 rounded-full"
-                      style={{
-                        background:
-                          "radial-gradient(circle at 32% 28%, #FFE0C5 0%, #FF8C42 55%, #ED6F22 100%)",
-                        boxShadow:
-                          "0 0 12px 2px rgba(255, 140, 66, 0.42), inset 0 1px 1px rgba(255, 230, 200, 0.55)",
-                      }}
-                    />
-                  </motion.div>
-                )}
               </div>
 
               <motion.p
                 className="text-center"
                 style={{
-                  maxWidth: 160,
+                  maxWidth: 200,
                   fontSize: 14,
-                  lineHeight: 1.3,
+                  lineHeight: 1.35,
                   color: column.isChosen
                     ? ORANGE_LABEL
-                    : "rgba(120, 120, 130, 0.78)",
+                    : "rgba(110, 110, 120, 0.75)",
                   fontWeight: column.isChosen ? 500 : 400,
-                  letterSpacing: column.isChosen ? "-0.005em" : 0,
                 }}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
-                  delay: column.isChosen ? 1.6 : 0.4 + columnIndex * 0.05,
-                  duration: 0.32,
+                  delay: column.isChosen ? 1.2 : 0.4 + columnIndex * 0.06,
+                  duration: 0.3,
                 }}
                 title={column.label}
               >
                 {shortLabel(column.label)}
               </motion.p>
 
-              {/* Mono count badge */}
+              {/* Mono count */}
               <motion.span
                 className="font-mono tabular-nums"
                 style={{
@@ -216,13 +167,13 @@ export function ReflectionDistribution({
                   letterSpacing: "0.1em",
                   color: column.isChosen
                     ? ORANGE_LABEL
-                    : "rgba(120, 120, 130, 0.45)",
+                    : "rgba(120, 120, 130, 0.42)",
                   marginTop: -8,
                 }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{
-                  delay: column.isChosen ? 1.75 : 0.55 + columnIndex * 0.05,
+                  delay: column.isChosen ? 1.35 : 0.55 + columnIndex * 0.06,
                   duration: 0.3,
                 }}
               >
