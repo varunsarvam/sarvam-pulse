@@ -1214,9 +1214,12 @@ export function RespondentFlow({
           pendingNullReasonRef.current = data.null_reason ?? null;
           pendingNullDebugInfoRef.current = data.debug_info ?? null;
         } else {
+          setIsAnswering(false);
           toast.error("Connection hiccup, please try again");
+          return;
         }
       } catch {
+        setIsAnswering(false);
         toast.error("Connection hiccup, please try again");
       }
     }
@@ -1246,6 +1249,7 @@ export function RespondentFlow({
             pendingReflectionRef.current = reflection;
             setFollowUpPrompt(follow_up);
             setIsSpeaking(false);
+            setIsAnswering(false);
             setAvatarMode("thinking");
             playTick();
             setStage("FOLLOWUP");
