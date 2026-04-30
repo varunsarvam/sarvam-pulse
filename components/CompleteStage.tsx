@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { StaticRadialGradient } from "@paper-design/shaders-react";
+import { Share2, Check } from "lucide-react";
 import type { Form } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -111,6 +112,7 @@ export function CompleteStage({
   const [retryAttempts, setRetryAttempts] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [respondentName, setRespondentName] = useState<string | null>(null);
+  const [shared, setShared] = useState(false);
 
   // Shader focal state — updated by RAF lerp so React re-renders stay at ≤60fps
   const [focalAngle, setFocalAngle] = useState(0);
@@ -260,6 +262,30 @@ export function CompleteStage({
       cancelAnimationFrame(rafRef.current);
     };
   }, [setFocal]);
+
+  // ── Share card ─────────────────────────────────────────────────────────────
+
+  async function handleShare() {
+    if (!sessionId) return;
+    const url = `${window.location.origin}/share/${sessionId}`;
+    const text = identity
+      ? `I'm "${identity.label}" on Sarvam Pulse. See what you are →`
+      : "Check out my Pulse identity card";
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: identity?.label ?? "Pulse", text, url });
+        return;
+      } catch {
+        // fall through
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    } catch {}
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -436,6 +462,24 @@ export function CompleteStage({
           </div>
         </motion.div>
       </div>
+
+      {/* Share button */}
+      <motion.button
+        type="button"
+        onClick={handleShare}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.7, ease: "easeOut" }}
+        className="flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-white transition-all hover:brightness-110 active:scale-95"
+        style={{
+          background: "rgba(255,255,255,0.12)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(255,255,255,0.2)",
+        }}
+      >
+        {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+        {shared ? "Link copied!" : "Share card"}
+      </motion.button>
     </div>
   );
 }

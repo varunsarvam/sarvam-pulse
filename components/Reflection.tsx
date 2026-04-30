@@ -504,9 +504,8 @@ export function Reflection({
     };
   }, []);
 
-  // Reactions are now expressive only. They register visually + persist via
-  // /api/reactions, but they do NOT advance the flow. Continue is the only
-  // way to move on.
+  // Reacting registers the emoji visually + in DB, then advances after a
+  // short pause so the animation is visible before moving on.
   function handleReaction(key: string) {
     if (reacted) return;
     setReacted(key);
@@ -522,6 +521,9 @@ export function Reflection({
         }),
       }).catch(() => {});
     }
+
+    // Advance after the emoji pop animation settles
+    setTimeout(() => advance(), 900);
   }
 
   const { type, copy, payload } = reflection;
@@ -600,7 +602,9 @@ export function Reflection({
             >
               {isLoading ? <HeadlineLoader /> : headlineText}
             </motion.h1>
-            <EmojiBar reacted={reacted} onReact={handleReaction} dark center />
+            {showContinue && (
+              <EmojiBar reacted={reacted} onReact={handleReaction} dark center />
+            )}
 
             {showContinue && (
               <motion.button
@@ -645,7 +649,7 @@ export function Reflection({
           >
             {isLoading ? <HeadlineLoader /> : headlineText}
           </motion.h1>
-          {!useSliderLayout && (
+          {showContinue && !useSliderLayout && (
             <EmojiBar reacted={reacted} onReact={handleReaction} dark />
           )}
         </div>
@@ -731,7 +735,7 @@ export function Reflection({
           </>
         )}
 
-        {!useSliderLayout && (
+        {showContinue && !useSliderLayout && (
           <EmojiBar reacted={reacted} onReact={handleReaction} />
         )}
 
