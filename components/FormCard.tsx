@@ -69,30 +69,6 @@ export function FormCard({
       className="relative flex aspect-[3/4] cursor-pointer flex-col overflow-hidden rounded-2xl p-5 shadow-lg"
       style={{ background: bg }}
     >
-      {/* Header row */}
-      <div className="flex items-center justify-between">
-        <span
-          className="font-mono text-[9px] uppercase tracking-[0.2em]"
-          style={{ color: "rgba(255,255,255,0.55)" }}
-        >
-          {form.tone}
-        </span>
-        <span
-          className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider"
-          style={{ color: "rgba(255,255,255,0.55)" }}
-        >
-          <span
-            className="h-1.5 w-1.5 rounded-full"
-            style={{
-              background:
-                form.status === "published"
-                  ? "rgba(255,255,255,0.7)"
-                  : "rgba(255,255,255,0.35)",
-            }}
-          />
-          {form.status}
-        </span>
-      </div>
 
       {/* Title */}
       <h2
