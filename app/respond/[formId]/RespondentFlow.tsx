@@ -760,7 +760,11 @@ function QuestionStage({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.97 }}
                 transition={{ duration: 0.45, ease: "easeOut" }}
-                className="flex min-h-[240px] w-full max-w-2xl flex-col items-center justify-center rounded-3xl bg-white p-8 text-black shadow-2xl"
+                className={`w-full max-w-2xl rounded-3xl bg-white text-black shadow-2xl ${
+                  question.input_type === "name"
+                    ? "flex min-h-[240px] flex-col items-center justify-center p-8"
+                    : "p-6"
+                }`}
               >
                 {inputArea}
               </motion.div>
@@ -1522,6 +1526,9 @@ export function RespondentFlow({
                   questionId={questions[questionIndex]?.id ?? ""}
                   questionInputType={questions[questionIndex]?.input_type}
                   splitLayout
+                  tone={form.tone}
+                  muted={muted}
+                  onSpeakingChange={handleSpeakingChange}
                   onDone={advanceQuestion}
                 />
               ) : (
