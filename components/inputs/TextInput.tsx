@@ -19,11 +19,19 @@ export function TextInput({
   onTextChange,
 }: TextInputProps) {
   const [text, setText] = useState("");
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    ref.current?.focus();
+    textareaRef.current?.focus();
   }, [question.id]);
+
+  // Keep overlay in sync with textarea scroll
+  function handleScroll() {
+    if (overlayRef.current && textareaRef.current) {
+      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (disabled) return;
@@ -46,20 +54,24 @@ export function TextInput({
     <div className="relative flex w-full flex-col gap-4 pb-14">
       <div className="relative">
         <textarea
-          ref={ref}
+          ref={textareaRef}
           value={text}
           onChange={(e) => {
             setText(e.target.value);
             onTextChange?.(e.target.value);
           }}
           onKeyDown={handleKeyDown}
+          onScroll={handleScroll}
           disabled={disabled}
           rows={5}
           aria-label="Text answer"
-          className="font-matter scrollbar-thin scrollbar-thumb-foreground/20 scrollbar-track-transparent min-h-[180px] w-full resize-none bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-relaxed text-transparent caret-transparent outline-none disabled:cursor-not-allowed md:text-[2rem]"
+          className="font-matter scrollbar-none min-h-[180px] max-h-[260px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-snug text-transparent caret-transparent outline-none disabled:cursor-not-allowed md:text-[2rem]"
         />
-        <div className="pointer-events-none absolute inset-0 overflow-hidden px-2 py-2">
-          <div className="font-matter whitespace-pre-wrap break-words text-[1.6rem] font-medium leading-relaxed text-foreground md:text-[2rem]">
+        <div
+          ref={overlayRef}
+          className="pointer-events-none absolute inset-0 max-h-[260px] overflow-y-hidden px-2 py-2"
+        >
+          <div className="font-matter whitespace-pre-wrap break-words text-[1.6rem] font-medium leading-snug text-foreground md:text-[2rem]">
             {text || (
               <span className="text-foreground/25">Take your time...</span>
             )}
