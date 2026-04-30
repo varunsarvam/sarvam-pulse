@@ -81,7 +81,7 @@ export function FormCard({
       {/* Spacer */}
       <div className="min-h-[20px] flex-1" />
 
-      {/* Stats row */}
+      {/* Stats + copy row */}
       <div className="mb-3 flex items-end justify-between">
         <div>
           <p className="font-mono text-base font-bold leading-none text-white">
@@ -94,50 +94,50 @@ export function FormCard({
             responses
           </p>
         </div>
-        <div className="text-right">
-          <p className="font-mono text-base font-bold leading-none text-white">
-            {completedCount}
-          </p>
-          <p
-            className="mt-0.5 font-mono text-[9px] uppercase tracking-widest"
-            style={{ color: "rgba(255,255,255,0.55)" }}
+        <div className="flex items-end gap-3">
+          <div className="text-right">
+            <p className="font-mono text-base font-bold leading-none text-white">
+              {completedCount}
+            </p>
+            <p
+              className="mt-0.5 font-mono text-[9px] uppercase tracking-widest"
+              style={{ color: "rgba(255,255,255,0.55)" }}
+            >
+              completed
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleCopy}
+            aria-label="Copy link"
+            className="mb-0.5 flex h-7 w-7 items-center justify-center rounded-lg transition-all hover:brightness-125"
+            style={{
+              background: "rgba(255,255,255,0.15)",
+              border: "1px solid rgba(255,255,255,0.22)",
+            }}
           >
-            completed
-          </p>
+            {copied ? (
+              <Check className="h-3 w-3 text-white" />
+            ) : (
+              <Copy className="h-3 w-3 text-white" />
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        <Link
-          href={`/respond/${form.id}`}
-          className="flex flex-1 items-center justify-center rounded-xl py-2.5 text-xs font-semibold text-white transition-all hover:brightness-110"
-          style={{
-            background: "rgba(255,255,255,0.18)",
-            backdropFilter: "blur(16px)",
-            border: "1px solid rgba(255,255,255,0.28)",
-          }}
-        >
-          Open form →
-        </Link>
-        <button
-          type="button"
-          onClick={handleCopy}
-          aria-label="Copy link"
-          className="flex h-[38px] w-[38px] items-center justify-center rounded-xl transition-all hover:brightness-110"
-          style={{
-            background: "rgba(255,255,255,0.18)",
-            backdropFilter: "blur(16px)",
-            border: "1px solid rgba(255,255,255,0.28)",
-          }}
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5 text-white" />
-          ) : (
-            <Copy className="h-3.5 w-3.5 text-white" />
-          )}
-        </button>
-      </div>
+      {/* Open button — full width */}
+      <Link
+        href={`/respond/${form.id}`}
+        className="flex w-full items-center justify-center rounded-2xl py-3 text-sm font-semibold text-white transition-all hover:brightness-110"
+        style={{
+          background: "rgba(0,0,0,0.22)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.14)",
+          letterSpacing: "0.01em",
+        }}
+      >
+        Open form →
+      </Link>
     </motion.article>
   );
 }
