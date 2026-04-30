@@ -326,17 +326,19 @@ function EmojiBar({
   reacted,
   onReact,
   dark = false,
+  center = false,
 }: {
   reacted: string | null;
   onReact: (key: string) => void;
   dark?: boolean;
+  center?: boolean;
 }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ delay: 0.5, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-      className="w-fit self-start"
+      className={`w-fit ${center ? "self-center" : "self-start"}`}
     >
       <div
         className="flex items-center gap-0.5 rounded-full p-1"
@@ -556,7 +558,7 @@ export function Reflection({
             >
               {copy}
             </motion.h1>
-            <EmojiBar reacted={reacted} onReact={handleReaction} dark />
+            <EmojiBar reacted={reacted} onReact={handleReaction} dark center />
 
             {showContinue && (
               <motion.button
