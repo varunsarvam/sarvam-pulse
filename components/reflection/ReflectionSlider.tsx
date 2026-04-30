@@ -59,6 +59,8 @@ interface ReflectionSliderProps {
   copy: string;
   payload: Record<string, unknown>;
   hideHeadline?: boolean;
+  /** TTS-typewriter-revealed text — overrides `copy` while audio is playing. */
+  displayText?: string;
 }
 
 interface Particle {
@@ -139,12 +141,16 @@ function makeParticles(distribution: Record<string, number>): Particle[] {
   return particles.slice(0, 40);
 }
 
-export function ReflectionSlider({ copy, payload, hideHeadline = false }: ReflectionSliderProps) {
+export function ReflectionSlider({ copy, payload, hideHeadline = false, displayText }: ReflectionSliderProps) {
   const distribution = asDistribution(payload.distribution);
   const particles = makeParticles(distribution);
   const value = typeof payload.value === "number" ? payload.value : 50;
   const hex = resolveUserHex(value);
   const lottieData = useLottieData(notoUrl(hex));
+  // Phase 6.5d: explicit-undefined check so an empty `displayText` from the
+  // parent (the "loading" placeholder state) renders as empty rather than
+  // falling through to `copy`.
+  const headlineText = displayText !== undefined ? displayText : copy;
 
   return (
     <div
@@ -162,7 +168,7 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
         >
-          {copy}
+          {headlineText}
         </motion.h2>
       )}
 

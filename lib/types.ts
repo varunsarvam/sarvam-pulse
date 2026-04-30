@@ -18,6 +18,7 @@ export interface Form {
   tone: FormTone;
   status: FormStatus;
   created_at: string;
+  appearance: string | null;
 }
 
 export interface Question {

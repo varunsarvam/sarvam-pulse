@@ -247,6 +247,7 @@ export async function POST(req: NextRequest) {
         intent: input.formIntent,
         tone: input.tone,
         anonymous: input.anonymous,
+        appearance: input.appearance ?? "/paper-image.jpg",
         archetype_clusters: generated.archetype_clusters,
         status: "published",
       })

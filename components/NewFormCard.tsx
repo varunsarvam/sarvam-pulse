@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { CARD_COLORS } from "@/lib/card-colors";
 
 const STRIPES = [
   { color: "#16a34a", height: 48 }, // green  — tallest, bottom
@@ -13,6 +14,9 @@ const STRIPES = [
 ];
 
 export function NewFormCard({ index }: { index: number }) {
+  // index is forms.length — that's what the next card's color index will be
+  const ci = index % CARD_COLORS.length;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -21,7 +25,7 @@ export function NewFormCard({ index }: { index: number }) {
       whileHover={{ scale: 1.015, y: -2 }}
     >
       <Link
-        href="/create"
+        href={`/create?ci=${ci}`}
         className="relative flex aspect-[3/4] cursor-pointer flex-col overflow-hidden rounded-xl shadow-sm"
         style={{ background: "#f5f4f0" }}
       >

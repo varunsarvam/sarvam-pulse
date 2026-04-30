@@ -933,6 +933,11 @@ export function RespondentFlow({
   const pendingNullDebugInfoRef = useRef<string | null>(null);
   const reflectionHistoryRef = useRef<ReflectionResult["type"][]>([]);
   const nullReflectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Holds the deferred stage flip used by `goToReflection` and
+  // `advanceQuestion`. Gives the outgoing stage's TTSPlayer ~500 ms to
+  // unmount + pause its audio before the next stage's TTSPlayer mounts and
+  // starts fetching.
+  const stageTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── TTS state ──
   const [muted, setMuted] = useState<boolean>(() => {
@@ -1079,6 +1084,14 @@ export function RespondentFlow({
         URL.revokeObjectURL(audioUrl);
       });
       preloadCacheRef.current.clear();
+      if (stageTransitionTimerRef.current) {
+        clearTimeout(stageTransitionTimerRef.current);
+        stageTransitionTimerRef.current = null;
+      }
+      if (nullReflectionTimerRef.current) {
+        clearTimeout(nullReflectionTimerRef.current);
+        nullReflectionTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -1177,25 +1190,36 @@ export function RespondentFlow({
       clearTimeout(nullReflectionTimerRef.current);
       nullReflectionTimerRef.current = null;
     }
-    setPhrasedForTTS(null);
-    setPreloadedAudioUrlForTTS(null);
-    setIsSpeaking(false);
-    setTtsDisplayText("");
-    setTtsDone(false);
-    setReflectionData(null);
-    setNullReason(null);
-    setNullDebugInfo(null);
-    pendingReflectionRef.current = null;
-    pendingNullReasonRef.current = null;
-    pendingNullDebugInfoRef.current = null;
-    setAvatarMode("thinking");
-    if (questionIndex + 1 < questions.length) {
-      setQuestionIndex((i) => i + 1);
-      setStage("QUESTION");
-    } else {
-      setAvatarMode("idle");
-      setStage("COMPLETE");
+    // Reflection's TTS is already finished by the time Continue is clickable
+    // (Continue is gated on reflectionTTSDone), so no audio is playing right
+    // now. The 500 ms buffer below is a visual hold — let framer-motion's
+    // exit animation finish and TTSPlayer unmount cleanly before the next
+    // stage's TTSPlayer mounts and kicks off its preload-audio playback.
+    if (stageTransitionTimerRef.current) {
+      clearTimeout(stageTransitionTimerRef.current);
     }
+    stageTransitionTimerRef.current = setTimeout(() => {
+      stageTransitionTimerRef.current = null;
+      setPhrasedForTTS(null);
+      setPreloadedAudioUrlForTTS(null);
+      setIsSpeaking(false);
+      setTtsDisplayText("");
+      setTtsDone(false);
+      setReflectionData(null);
+      setNullReason(null);
+      setNullDebugInfo(null);
+      pendingReflectionRef.current = null;
+      pendingNullReasonRef.current = null;
+      pendingNullDebugInfoRef.current = null;
+      setAvatarMode("thinking");
+      if (questionIndex + 1 < questions.length) {
+        setQuestionIndex((i) => i + 1);
+        setStage("QUESTION");
+      } else {
+        setAvatarMode("idle");
+        setStage("COMPLETE");
+      }
+    }, 500);
   }
 
   async function handleAnswer(rawValue: unknown, transcript?: string) {
@@ -1374,22 +1398,33 @@ export function RespondentFlow({
       nullReflectionTimerRef.current = null;
     }
     const ref = reflection ?? null;
+    // Tear the question's TTS down NOW so its audio stops immediately.
+    // (In practice it's already idle — input is disabled until ttsDone — but
+    // we don't depend on that invariant here.)
     setPhrasedForTTS(null);
     setPreloadedAudioUrlForTTS(null);
     setIsSpeaking(false);
     setTtsDisplayText("");
     setTtsDone(false);
     setFollowUpPrompt(null);
-    setReflectionData(ref);
-    setNullReason(ref ? null : reason ?? null);
-    setNullDebugInfo(ref ? null : debugInfo ?? null);
     setAvatarMode("idle");
     if (ref) playWhoosh();
     playTick();
-    setStage("REFLECTION");
-    if (!ref) {
-      nullReflectionTimerRef.current = setTimeout(advanceQuestion, 2000);
+    // 500 ms buffer before flipping to REFLECTION so the question's TTSPlayer
+    // unmounts cleanly before the reflection's TTSPlayer fetches new audio.
+    if (stageTransitionTimerRef.current) {
+      clearTimeout(stageTransitionTimerRef.current);
     }
+    stageTransitionTimerRef.current = setTimeout(() => {
+      stageTransitionTimerRef.current = null;
+      setReflectionData(ref);
+      setNullReason(ref ? null : reason ?? null);
+      setNullDebugInfo(ref ? null : debugInfo ?? null);
+      setStage("REFLECTION");
+      if (!ref) {
+        nullReflectionTimerRef.current = setTimeout(advanceQuestion, 2000);
+      }
+    }, 500);
   }
 
   function handleSpeakingChange(speaking: boolean) {
@@ -1400,7 +1435,7 @@ export function RespondentFlow({
   return (
     <div className="relative h-screen overflow-hidden">
       <div className="fixed inset-0 z-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
-      <PresenceShader mode={shaderMode} className="fixed inset-0 z-0" />
+      <PresenceShader mode={shaderMode} className="fixed inset-0 z-0" image={form.appearance ?? "/paper-image.jpg"} />
       {/* Cover the blue shader on the complete screen — solid color from round-robin palette */}
       {stage === "COMPLETE" && (
         <div

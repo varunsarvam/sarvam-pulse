@@ -6,6 +6,8 @@ interface ReflectionTribeProps {
   copy: string;
   quotes: string[];
   hideHeadline?: boolean;
+  /** TTS-typewriter-revealed text — overrides `copy` while audio is playing. */
+  displayText?: string;
 }
 
 function truncateQuote(quote: string): string {
@@ -13,8 +15,13 @@ function truncateQuote(quote: string): string {
   return clean.length > 100 ? `${clean.slice(0, 100)}...` : clean;
 }
 
-export function ReflectionTribe({ copy, quotes, hideHeadline = false }: ReflectionTribeProps) {
+export function ReflectionTribe({ copy, quotes, hideHeadline = false, displayText }: ReflectionTribeProps) {
   const visibleQuotes = quotes.slice(0, 3);
+  // Phase 6.5d: explicit-undefined check so an empty `displayText` from the
+  // parent (the "loading" placeholder state) renders as empty rather than
+  // falling through to `copy`. Standalone callers that don't pass the prop
+  // still get the legacy `copy` fallback.
+  const headlineText = displayText !== undefined ? displayText : copy;
 
   return (
     <div className="flex w-full flex-col items-center">
@@ -25,7 +32,7 @@ export function ReflectionTribe({ copy, quotes, hideHeadline = false }: Reflecti
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
         >
-          {copy}
+          {headlineText}
         </motion.h2>
       )}
 

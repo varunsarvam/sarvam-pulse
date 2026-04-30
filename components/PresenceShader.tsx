@@ -8,6 +8,7 @@ export type PresenceShaderMode = "static" | "speaking" | "listening";
 interface PresenceShaderProps {
   mode: PresenceShaderMode;
   className?: string;
+  image?: string;
 }
 
 const BASE_SHIFT = 0.7;
@@ -36,7 +37,7 @@ function targetForMode(mode: PresenceShaderMode) {
   return { shiftAmp: 0, stretchAmp: 0, distortionAmp: 0, period: 2800 };
 }
 
-export function PresenceShader({ mode, className }: PresenceShaderProps) {
+export function PresenceShader({ mode, className, image = "/paper-image.jpg" }: PresenceShaderProps) {
   const [liveShift, setLiveShift] = useState(BASE_SHIFT);
   const [liveStretch, setLiveStretch] = useState(BASE_STRETCH);
   const [liveDistortion, setLiveDistortion] = useState(BASE_DISTORTION);
@@ -171,7 +172,7 @@ export function PresenceShader({ mode, className }: PresenceShaderProps) {
       <FlutedGlass
         width="100%"
         height="100%"
-        image="/paper-image.jpg"
+        image={image}
         colorBack="#ffffff00"
         colorShadow="#000133"
         colorHighlight="#0017ad"

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Check } from "lucide-react";
+import { FlutedGlass } from "@paper-design/shaders-react";
 import type { FormTone } from "@/lib/types";
+import { getBgColor } from "@/lib/card-colors";
 
 // =============================================================================
 // Types
@@ -117,7 +119,7 @@ const LOADING_STAGES = [
   { from: 52, copy: "Almost ready…" },
 ];
 
-function GeneratingOverlay() {
+function GeneratingOverlay({ bgColor }: { bgColor: string }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const start = Date.now();
@@ -137,7 +139,7 @@ function GeneratingOverlay() {
       transition={{ duration: 0.4 }}
       className="fixed inset-0 z-50 flex items-center justify-center"
     >
-      <div className="absolute inset-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
+      <div className="absolute inset-0" style={{ background: bgColor }} />
       {/* Soft pulsing tint to give the wait some life */}
       <motion.div
         className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.07),transparent_70%)]"
@@ -312,15 +314,107 @@ function QuestionRow({
 }
 
 // =============================================================================
+// Appearance picker
+// =============================================================================
+
+const APPEARANCES = [
+  { image: "/paper-image.jpg",        label: "Blue" },
+  { image: "/paper-image-orange.jpg", label: "Orange" },
+  { image: "/paper-image-green.jpg",  label: "Green" },
+  { image: "/paper-image-red.jpg",    label: "Red" },
+  { image: "/paper-image-yello.jpg",  label: "Yellow" },
+] as const;
+
+function ShaderThumb({ image, selected, onClick }: { image: string; selected: boolean; onClick: () => void }) {
+  const rafRef = useRef<number | null>(null);
+  const phaseRef = useRef(0);
+  const [shift, setShift] = useState(0.7);
+  const [stretch, setStretch] = useState(0.2);
+
+  useEffect(() => {
+    function tick() {
+      phaseRef.current += 0.002;
+      setShift(0.7 + Math.sin(phaseRef.current) * 0.05);
+      setStretch(0.2 + Math.sin(phaseRef.current + Math.PI / 2) * 0.04);
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, []);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative flex flex-1 flex-col items-center gap-2"
+    >
+      <div
+        className={
+          "relative w-full overflow-hidden rounded-xl transition-all duration-200 " +
+          (selected ? "ring-2 ring-zinc-900 ring-offset-2 ring-offset-white" : "opacity-60 hover:opacity-80")
+        }
+        style={{ aspectRatio: "3/4" }}
+      >
+        <FlutedGlass
+          width="100%"
+          height="100%"
+          image={image}
+          colorBack="#ffffff00"
+          colorShadow="#000133"
+          colorHighlight="#0017ad"
+          size={1}
+          shadows={0}
+          highlights={0}
+          shape="pattern"
+          angle={0}
+          distortionShape="cascade"
+          distortion={0.67}
+          shift={shift}
+          stretch={stretch}
+          blur={0.56}
+          edges={0.56}
+          margin={0}
+          marginLeft={0}
+          marginRight={0}
+          marginTop={0}
+          marginBottom={0}
+          grainMixer={0.08}
+          grainOverlay={0.15}
+          scale={4}
+          rotation={0}
+          offsetX={-0.65}
+          offsetY={0.55}
+          fit="contain"
+          originX={0}
+          originY={0}
+          minPixelRatio={2}
+        />
+        {selected && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white">
+              <Check className="h-3.5 w-3.5 text-zinc-900" />
+            </div>
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// =============================================================================
 // Page
 // =============================================================================
 
-export default function CreatePage() {
+function CreatePageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const ci = parseInt(searchParams.get("ci") ?? "0", 10);
+  const bgColor = getBgColor(ci);
   const [title, setTitle] = useState("");
   const [intent, setIntent] = useState("");
   const [tone, setTone] = useState<FormTone>("insightful");
   const [anonymous, setAnonymous] = useState(false);
+  const [appearance, setAppearance] = useState<string>(APPEARANCES[0].image);
   const [questions, setQuestions] = useState<DraftQuestion[]>(() => [
     { _id: crypto.randomUUID(), intent: "", input_type: "voice" },
   ]);
@@ -366,6 +460,7 @@ export default function CreatePage() {
           formIntent: intent.trim(),
           tone,
           anonymous,
+          appearance,
           questionIntents: questions.map((q) => ({
             intent: q.intent.trim(),
             input_type: q.input_type,
@@ -423,9 +518,9 @@ export default function CreatePage() {
 
   return (
     <div className="relative min-h-screen w-full">
-      {/* Background — same image used by the respondent flow for visual continuity */}
-      <div className="fixed inset-0 z-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
-      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.04),transparent_60%)]" />
+      {/* Background — round-robin color matching the new form's card color */}
+      <div className="fixed inset-0 z-0 transition-colors duration-500" style={{ background: bgColor }} />
+      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.05),transparent_65%)]" />
 
       <div className="relative z-10 mx-auto w-full max-w-2xl px-6 py-16 md:px-8 md:py-20">
         {/* Header */}
@@ -433,11 +528,6 @@ export default function CreatePage() {
           <h1 className="font-display text-[2.25rem] leading-tight tracking-tight text-white md:text-[2.875rem]">
             Create a Pulse form
           </h1>
-          <p className="font-matter mt-3 max-w-md text-[15px] leading-relaxed text-white/65">
-            Tell us what you want to learn. We&apos;ll generate the questions in your
-            voice, simulate ten people answering, and surface the patterns that
-            make reflections feel alive.
-          </p>
         </div>
 
         {/* Form meta — single white card */}
@@ -537,6 +627,25 @@ export default function CreatePage() {
           </div>
         </div>
 
+        {/* Appearance */}
+        <div className="mt-10">
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="font-display text-xl text-white md:text-2xl">Appearance</h2>
+          </div>
+          <div className="rounded-2xl bg-white px-5 py-5 shadow-[0_2px_24px_rgba(8,18,40,0.08)]">
+            <div className="flex gap-3">
+              {APPEARANCES.map((opt) => (
+                <ShaderThumb
+                  key={opt.image}
+                  image={opt.image}
+                  selected={appearance === opt.image}
+                  onClick={() => setAppearance(opt.image)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Questions */}
         <div className="mt-10 mb-3 flex items-baseline justify-between">
           <h2 className="font-display text-xl text-white md:text-2xl">Questions</h2>
@@ -614,7 +723,15 @@ export default function CreatePage() {
       </div>
 
       {/* Loading takeover */}
-      <AnimatePresence>{submitting && <GeneratingOverlay />}</AnimatePresence>
+      <AnimatePresence>{submitting && <GeneratingOverlay bgColor={bgColor} />}</AnimatePresence>
     </div>
+  );
+}
+
+export default function CreatePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0E1A6B]" />}>
+      <CreatePageInner />
+    </Suspense>
   );
 }

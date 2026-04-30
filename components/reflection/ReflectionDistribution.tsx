@@ -6,6 +6,8 @@ interface ReflectionDistributionProps {
   copy: string;
   payload: Record<string, unknown>;
   hideHeadline?: boolean;
+  /** TTS-typewriter-revealed text — overrides `copy` while audio is playing. */
+  displayText?: string;
 }
 
 interface OptionColumn {
@@ -74,8 +76,13 @@ export function ReflectionDistribution({
   copy,
   payload,
   hideHeadline = false,
+  displayText,
 }: ReflectionDistributionProps) {
   const columns = buildColumns(payload);
+  // Phase 6.5d: explicit-undefined check so an empty `displayText` from the
+  // parent (the "loading" placeholder state) renders as empty rather than
+  // falling through to `copy`.
+  const headlineText = displayText !== undefined ? displayText : copy;
 
   return (
     <div className="relative flex min-h-[460px] w-full flex-col items-center justify-center overflow-hidden">
@@ -86,7 +93,7 @@ export function ReflectionDistribution({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
         >
-          {copy}
+          {headlineText}
         </motion.h2>
       )}
 

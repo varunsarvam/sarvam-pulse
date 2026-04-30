@@ -40,6 +40,7 @@ export const formGenerationInputSchema = z.object({
   formIntent: z.string().min(1).max(2000),
   tone: z.enum(["playful", "calm", "direct", "insightful"]),
   anonymous: z.boolean(),
+  appearance: z.string().optional().default("/paper-image.jpg"),
   questionIntents: z
     .array(
       z.object({
