@@ -903,9 +903,20 @@ function QuestionStage({
           <div className="max-w-2xl text-left">{promptArea}</div>
         </div>
         <div className="flex w-full items-center justify-center md:w-[45%]">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-4 text-black shadow-2xl">
-            {inputArea}
-          </div>
+          <AnimatePresence>
+            {inputReady && (
+              <motion.div
+                key="input-card"
+                initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.97 }}
+                transition={{ duration: 0.45, ease: "easeOut" }}
+                className="w-full max-w-2xl rounded-3xl bg-white p-6 text-black shadow-2xl"
+              >
+                {inputArea}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     );
@@ -949,6 +960,7 @@ function FollowUpStage({
   ttsDone,
   preloaded,
   respondentName,
+  splitLayout,
 }: {
   prompt: string;
   inputType: "voice" | "text";
@@ -961,8 +973,8 @@ function FollowUpStage({
   ttsDone: boolean;
   preloaded?: PreloadItem | null;
   respondentName?: string | null;
+  splitLayout?: boolean;
 }) {
-  // Stub question satisfies component prop contracts
   const stubQuestion = {
     id: `followup-${prompt}`,
     form_id: "",
@@ -990,6 +1002,7 @@ function FollowUpStage({
       preamble="One more thing…"
       preloaded={preloaded}
       respondentName={respondentName}
+      splitLayout={splitLayout}
     />
   );
 }
@@ -1624,7 +1637,7 @@ export function RespondentFlow({
           )}
 
           {stage === "FOLLOWUP" && followUpPrompt && (
-            <motion.div key="followup" {...fadeUp} className="w-full">
+            <motion.div key="followup" {...fadeUp} className="w-full h-full">
               <FollowUpStage
                 prompt={followUpPrompt}
                 inputType={
@@ -1640,6 +1653,7 @@ export function RespondentFlow({
                 ttsDisplayText={ttsDisplayText}
                 ttsDone={ttsDone}
                 respondentName={respondentNameSaved}
+                splitLayout
               />
             </motion.div>
           )}

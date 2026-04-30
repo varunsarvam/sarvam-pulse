@@ -45,11 +45,11 @@ void main() {
   float t = u_time * 0.001;
   float amp = 0.34 + u_amp * 1.25;
 
-  vec2 cells = vec2(84.0, 19.0);
+  vec2 cells = vec2(58.0, 13.0);
   vec2 grid = floor(p * cells);
   vec2 cell = fract(p * cells) - 0.5;
-  vec2 pixelCell = vec2(cell.x * 2.7, cell.y * 1.45);
-  float pixel = smoothstep(0.44, 0.22, max(abs(pixelCell.x), abs(pixelCell.y)));
+  vec2 pixelCell = vec2(cell.x * 2.4, cell.y * 1.3);
+  float pixel = smoothstep(0.46, 0.18, max(abs(pixelCell.x), abs(pixelCell.y)));
 
   float x = grid.x / cells.x;
   float y = (grid.y / cells.y) * 2.0 - 1.0;
@@ -68,13 +68,13 @@ void main() {
   float centerLine = step(abs(y), 0.08);
   float active = max(rowActive, centerLine * 0.42);
 
-  vec3 greyDot = vec3(0.74, 0.77, 0.80);
-  vec3 orange = vec3(1.0, 0.34, 0.0);
+  vec3 greyDot = vec3(0.72, 0.74, 0.77);
+  vec3 orange = vec3(1.0, 0.38, 0.02);
 
-  float breathe = 0.84 + 0.16 * sin(t * 3.0 + columnSeed * 0.18);
+  float breathe = 0.88 + 0.12 * sin(t * 3.0 + columnSeed * 0.18);
   vec3 dotColor = mix(greyDot, orange, active);
 
-  float alpha = pixel * (0.045 + active * 0.92 * breathe);
+  float alpha = pixel * (0.18 + active * 0.82 * breathe);
   vec3 color = dotColor;
 
   gl_FragColor = vec4(color, alpha);
@@ -435,12 +435,12 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex min-h-[260px] w-full flex-col">
+    <div className="flex w-full flex-col">
       <div
-        className={`flex flex-1 flex-col items-center justify-center gap-6 px-6 ${
+        className={`flex flex-1 flex-col items-center justify-center gap-6 px-2 ${
           voiceState === "typing" || voiceState === "confirming" || voiceState === "error"
-            ? "py-6"
-            : "py-16"
+            ? "py-4"
+            : "py-10"
         }`}
       >
         <AnimatePresence mode="wait">
@@ -526,21 +526,21 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
         {voiceState === "transcribing" && (
           <motion.div
             key="transcribing"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.3 }}
-            className="flex flex-col items-center gap-5 w-full"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85 }}
+            transition={{ duration: 0.25 }}
+            className="flex flex-col items-center gap-4"
           >
-            {/* Spinner orb */}
-            <div className="flex h-28 w-28 items-center justify-center rounded-full border-2 border-border/50 bg-card">
-              <motion.div
-                className="h-8 w-8 rounded-full border-2 border-muted-foreground/30 border-t-foreground"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 0.85, repeat: Infinity, ease: "linear" }}
-              />
-            </div>
-            <TranscribingBlock />
+            <motion.div
+              className="relative h-28 w-28 rounded-full p-[3px]"
+              style={{ background: "conic-gradient(from 0deg, #c4b5fd, #6b7280, #93c5fd, #c4b5fd)" }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.15, repeat: Infinity, ease: "linear" }}
+            >
+              <div className="h-full w-full rounded-full bg-white" />
+            </motion.div>
+            <p className="text-sm text-muted-foreground">Transcribing…</p>
           </motion.div>
         )}
 
@@ -607,8 +607,21 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="flex flex-col gap-4 w-full"
+            className="flex flex-col gap-3 w-full"
           >
+            <AnimatePresence>
+              {!fallbackTextStarted && (
+                <motion.p
+                  className="text-sm text-[#b66100]"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                >
+                  I didn&apos;t catch that — try typing instead.
+                </motion.p>
+              )}
+            </AnimatePresence>
             <TextInput
               question={question}
               disabled={disabled}
@@ -650,42 +663,25 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
 
         </AnimatePresence>
       </div>
-      <div className="grid grid-cols-[1fr_auto] items-center gap-4 pt-6">
-        <div>
-          <AnimatePresence>
-            {voiceState === "error" && !fallbackTextStarted && (
-              <motion.p
-                className="text-sm text-[#b66100]"
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                I didn&apos;t catch that — try typing instead.
-              </motion.p>
-            )}
-          </AnimatePresence>
-        </div>
-        <div className="flex justify-end">
-          <AnimatePresence>
-            {voiceState === "idle" && (
-              <ModeToggleButton
-                key="switch-to-type"
-                mode="type"
-                disabled={disabled}
-                onClick={handleSwitchToText}
-              />
-            )}
-            {voiceState === "typing" && (
-              <ModeToggleButton
-                key="switch-to-voice"
-                mode="voice"
-                disabled={disabled}
-                onClick={handleSwitchToVoice}
-              />
-            )}
-          </AnimatePresence>
-        </div>
+      <div className="flex justify-end pt-4">
+        <AnimatePresence>
+          {voiceState === "idle" && (
+            <ModeToggleButton
+              key="switch-to-type"
+              mode="type"
+              disabled={disabled}
+              onClick={handleSwitchToText}
+            />
+          )}
+          {voiceState === "typing" && (
+            <ModeToggleButton
+              key="switch-to-voice"
+              mode="voice"
+              disabled={disabled}
+              onClick={handleSwitchToVoice}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
