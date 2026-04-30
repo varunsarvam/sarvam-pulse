@@ -291,11 +291,11 @@ function EmotionWash({ payload }: { payload: Record<string, unknown> }) {
 
 const STICKER_ROTATIONS = [-6, 4, -3, 7];
 
-// Die-cut sticker: hard white outline via 8-directional offsets + lift shadow
+// Die-cut sticker: tight 2px light-grey outline + very subtle lift shadow
 const STICKER_FILTER =
-  "drop-shadow(3px 0 0 #fff) drop-shadow(-3px 0 0 #fff) drop-shadow(0 3px 0 #fff) drop-shadow(0 -3px 0 #fff) drop-shadow(2px 2px 0 #fff) drop-shadow(-2px 2px 0 #fff) drop-shadow(2px -2px 0 #fff) drop-shadow(-2px -2px 0 #fff) drop-shadow(0 3px 8px rgba(0,0,0,0.12))";
+  "drop-shadow(2px 0 0 #e8e8e8) drop-shadow(-2px 0 0 #e8e8e8) drop-shadow(0 2px 0 #e8e8e8) drop-shadow(0 -2px 0 #e8e8e8) drop-shadow(1.5px 1.5px 0 #e8e8e8) drop-shadow(-1.5px 1.5px 0 #e8e8e8) drop-shadow(1.5px -1.5px 0 #e8e8e8) drop-shadow(-1.5px -1.5px 0 #e8e8e8) drop-shadow(0 2px 5px rgba(0,0,0,0.07))";
 const STICKER_FILTER_HOVER =
-  "drop-shadow(3px 0 0 #fff) drop-shadow(-3px 0 0 #fff) drop-shadow(0 3px 0 #fff) drop-shadow(0 -3px 0 #fff) drop-shadow(2px 2px 0 #fff) drop-shadow(-2px 2px 0 #fff) drop-shadow(2px -2px 0 #fff) drop-shadow(-2px -2px 0 #fff) drop-shadow(0 5px 14px rgba(0,0,0,0.18))";
+  "drop-shadow(2px 0 0 #e8e8e8) drop-shadow(-2px 0 0 #e8e8e8) drop-shadow(0 2px 0 #e8e8e8) drop-shadow(0 -2px 0 #e8e8e8) drop-shadow(1.5px 1.5px 0 #e8e8e8) drop-shadow(-1.5px 1.5px 0 #e8e8e8) drop-shadow(1.5px -1.5px 0 #e8e8e8) drop-shadow(-1.5px -1.5px 0 #e8e8e8) drop-shadow(0 4px 10px rgba(0,0,0,0.10))";
 
 function StickerButton({
   emoji,
