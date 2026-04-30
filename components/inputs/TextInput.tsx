@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import type { Question } from "@/lib/types";
 
@@ -20,18 +20,10 @@ export function TextInput({
 }: TextInputProps) {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     textareaRef.current?.focus();
   }, [question.id]);
-
-  // Keep overlay in sync with textarea scroll
-  function handleScroll() {
-    if (overlayRef.current && textareaRef.current) {
-      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
-    }
-  }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (disabled) return;
@@ -52,37 +44,21 @@ export function TextInput({
 
   return (
     <div className="relative flex w-full flex-col gap-4 pb-14">
-      <div className="relative">
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            onTextChange?.(e.target.value);
-          }}
-          onKeyDown={handleKeyDown}
-          onScroll={handleScroll}
-          disabled={disabled}
-          rows={5}
-          aria-label="Text answer"
-          className="font-matter scrollbar-none min-h-[180px] max-h-[260px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-snug text-transparent caret-transparent outline-none disabled:cursor-not-allowed md:text-[2rem]"
-        />
-        <div
-          ref={overlayRef}
-          className="pointer-events-none absolute inset-0 max-h-[260px] overflow-y-hidden px-2 py-2"
-        >
-          <div className="font-matter whitespace-pre-wrap break-words text-[1.6rem] font-medium leading-snug text-foreground md:text-[2rem]">
-            {text || (
-              <span className="text-foreground/25">Take your time...</span>
-            )}
-            <motion.span
-              className="ml-1 inline-block h-[1.6rem] w-[5px] translate-y-1 rounded-full bg-[#ff4d00] md:h-[2rem] md:w-[6px]"
-              animate={{ opacity: [0, 1, 1, 0] }}
-              transition={{ duration: 1.05, repeat: Infinity, times: [0, 0.2, 0.72, 1] }}
-            />
-          </div>
-        </div>
-      </div>
+      <textarea
+        ref={textareaRef}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          onTextChange?.(e.target.value);
+        }}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+        rows={5}
+        placeholder="Take your time..."
+        aria-label="Text answer"
+        className="font-matter scrollbar-none min-h-[180px] max-h-[260px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-snug text-foreground outline-none placeholder:text-foreground/25 disabled:cursor-not-allowed md:text-[2rem]"
+        style={{ caretColor: "#ff4d00" }}
+      />
 
       <AnimatePresence>
         {showButton && (
