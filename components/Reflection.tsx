@@ -290,6 +290,12 @@ function EmotionWash({ payload }: { payload: Record<string, unknown> }) {
 
 const STICKER_ROTATIONS = [-6, 4, -3, 7];
 
+// Stacked drop-shadow trick: 8 directional shadows at 0px blur = thick black stroke
+const STICKER_FILTER =
+  "drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1.5px #000) drop-shadow(0 5px 10px rgba(0,0,0,0.28))";
+const STICKER_FILTER_HOVER =
+  "drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 8px 16px rgba(0,0,0,0.32))";
+
 function StickerButton({
   emoji,
   index,
@@ -303,6 +309,7 @@ function StickerButton({
   onReact: () => void;
   isMe: boolean;
 }) {
+  const [hovered, setHovered] = useState(false);
   const baseRotate = STICKER_ROTATIONS[index % STICKER_ROTATIONS.length];
   const isDimmed = reacted !== null && !isMe;
 
@@ -310,23 +317,26 @@ function StickerButton({
     <motion.button
       onClick={(e) => { e.stopPropagation(); onReact(); }}
       disabled={reacted !== null}
-      initial={{ rotate: baseRotate, scale: 1 }}
+      initial={{ rotate: baseRotate }}
       animate={{
         rotate: isMe ? 0 : baseRotate,
-        scale: isDimmed ? 0.8 : 1,
-        opacity: isDimmed ? 0.25 : 1,
-        filter: isDimmed ? "grayscale(0.4)" : "grayscale(0)",
+        scale: isDimmed ? 0.75 : 1,
+        opacity: isDimmed ? 0.2 : 1,
       }}
-      whileHover={reacted === null ? { rotate: 0, scale: 1.28, y: -6 } : {}}
-      whileTap={reacted === null ? { scale: 0.88 } : {}}
+      whileHover={reacted === null ? { rotate: 0, scale: 1.35, y: -8 } : {}}
+      whileTap={reacted === null ? { scale: 0.9 } : {}}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
       transition={{ type: "spring", stiffness: 340, damping: 20 }}
-      className="cursor-pointer text-4xl leading-none select-none disabled:cursor-default"
+      className="cursor-pointer select-none disabled:cursor-default"
       style={{
-        filter: `drop-shadow(0 4px 8px rgba(0,0,0,0.18)) drop-shadow(0 1px 2px rgba(0,0,0,0.12))`,
+        fontSize: "2.4rem",
+        lineHeight: 1,
+        filter: hovered ? STICKER_FILTER_HOVER : STICKER_FILTER,
       }}
     >
       <motion.span
-        animate={isMe ? { scale: [1, 1.6, 1.1, 1.3], y: [0, -18, 3, -5] } : {}}
+        animate={isMe ? { scale: [1, 1.65, 1.1, 1.3], y: [0, -20, 3, -5] } : {}}
         transition={isMe ? { duration: 0.5, ease: "easeOut" } : undefined}
         style={{ display: "inline-block" }}
       >
