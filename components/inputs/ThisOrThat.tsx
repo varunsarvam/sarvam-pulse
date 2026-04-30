@@ -127,7 +127,7 @@ function Card({
       <motion.span
         animate={{ color: isActive ? "#ffffff" : "#18181b" }}
         transition={{ duration: 0.18 }}
-        className="relative z-10 px-6 text-center text-xl font-semibold leading-snug"
+        className="relative z-10 px-6 text-center text-xl font-medium leading-snug"
       >
         {label}
       </motion.span>
