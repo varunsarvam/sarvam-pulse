@@ -65,29 +65,56 @@ function ComparisonVisual({ payload }: { payload: Record<string, unknown> }) {
   const pct = (payload.percentile as number) ?? 50;
 
   return (
-    <div className="w-full max-w-xs mx-auto space-y-2">
-      <div className="relative h-2.5 rounded-full bg-muted/30">
-        {/* Filled track */}
+    <div className="w-full max-w-sm mx-auto">
+      {/* Mono caption — tells you what this bar represents */}
+      <p className="mb-5 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/55">
+        Where you land
+      </p>
+
+      <div className="relative h-2.5 rounded-full bg-zinc-200/60">
+        {/* Filled track — pastel violet→blue, matching circular loader */}
         <motion.div
-          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{
+            background: "linear-gradient(to right, #c4b5fd, #93c5fd)",
+          }}
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.45, ease: "easeOut" }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
         />
-        {/* Glowing dot */}
+
+        {/* Floating mono value above the dot */}
         <motion.div
-          className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-violet-400 border-2 border-background"
+          className="pointer-events-none absolute -top-7 font-mono text-[11px] font-medium tabular-nums tracking-tight text-foreground/80"
+          style={{
+            left: `${pct}%`,
+            transform: "translateX(-50%)",
+          }}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6, duration: 0.22 }}
+        >
+          {Math.round(pct)}
+        </motion.div>
+
+        {/* Soft glowing dot */}
+        <motion.div
+          className="absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full"
           style={{
             left: `${pct}%`,
             marginLeft: -10,
-            boxShadow: "0 0 14px 4px rgba(139,92,246,0.55)",
+            background:
+              "radial-gradient(circle at 35% 30%, #ffffff 0%, #c4b5fd 75%)",
+            boxShadow:
+              "0 0 18px 4px rgba(196,181,253,0.55), 0 0 5px rgba(147,197,253,0.5)",
           }}
           initial={{ opacity: 0, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3, duration: 0.2, type: "spring", bounce: 0.5 }}
+          transition={{ delay: 0.45, duration: 0.3, type: "spring", bounce: 0.45 }}
         />
       </div>
-      <div className="flex justify-between text-[10px] text-muted-foreground/40 font-medium">
+
+      <div className="mt-2 flex justify-between font-mono text-[10px] tracking-wider text-muted-foreground/40">
         <span>0</span>
         <span>100</span>
       </div>
