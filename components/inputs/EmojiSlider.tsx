@@ -66,35 +66,25 @@ function EmojiCard({
         onHoverStart={() => setHovered(true)}
         onHoverEnd={() => setHovered(false)}
         animate={{
-          scale: selected ? 1.08 : hovered ? 1.05 : 1,
-          backgroundColor: selected ? step.bg : "rgba(255,255,255,1)",
+          scale: selected ? 1.18 : hovered ? 1.1 : 1,
+          y: selected ? -6 : hovered ? -4 : 0,
+          opacity: 1,
         }}
-        whileTap={{ scale: 0.94 }}
+        whileTap={{ scale: 0.9 }}
         transition={{ type: "spring", stiffness: 380, damping: 22 }}
-        className="relative flex h-[88px] w-full flex-col items-center justify-center overflow-hidden rounded-2xl border disabled:pointer-events-none"
-        style={{
-          borderColor: selected ? step.ring : "#e4e4e7",
-          boxShadow: selected ? `0 0 0 1.5px ${step.ring}40` : undefined,
-        }}
+        className="relative flex flex-col items-center justify-center gap-1.5 disabled:pointer-events-none"
       >
-        {/* Emoji */}
-        <motion.div
-          animate={{ scale: selected ? 1.15 : 1 }}
-          transition={{ type: "spring", stiffness: 360, damping: 20 }}
-        >
-          <Lottie
-            path={notoUrl(step.hex)}
-            style={{ width: 52, height: 52 }}
-            loop
-            autoplay
-          />
-        </motion.div>
-
-        {/* Label — only on selected */}
+        <Lottie
+          path={notoUrl(step.hex)}
+          style={{ width: 72, height: 72 }}
+          loop
+          autoplay
+        />
+        {/* Label on selected */}
         <AnimatePresence>
           {selected && (
             <motion.span
-              className="absolute bottom-2 text-[10px] font-semibold"
+              className="text-[11px] font-semibold"
               style={{ color: step.ring }}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -133,7 +123,7 @@ export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSlide
     <div className="flex w-full flex-col gap-5 py-2">
 
       {/* ── 3×2 grid ── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2">
         {STEPS.map((s) => (
           <EmojiCard
             key={s.value}
