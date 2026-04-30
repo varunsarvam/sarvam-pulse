@@ -439,19 +439,18 @@ function QuestionStage({
   showFallbackCopy,
   preamble,
   splitLayout = false,
+  isAnswering = false,
 }: {
   question: Question;
   index: number;
   total: number;
   onAnswer: (rawValue: unknown, transcript?: string) => void;
-  /** Typewriter-revealed text from the parent's narration. Empty until TTS ticks. */
   displayText: string;
-  /** Whether TTS playback (or slow-TTS fallback) has finished. Gates input reveal. */
   ttsDone: boolean;
-  /** Set by the parent at 3 s if `displayText` is still empty (slow-TTS fallback). */
   showFallbackCopy: boolean;
   preamble?: string;
   splitLayout?: boolean;
+  isAnswering?: boolean;
 }) {
   const { input_type, options } = question;
 
@@ -516,7 +515,7 @@ function QuestionStage({
     onAnswer(v);
   }
 
-  const inputDisabled = !ttsDone;
+  const inputDisabled = !ttsDone || isAnswering;
   const inputArea = (
     <div
       className={`transition-opacity duration-200 ${
@@ -620,8 +619,19 @@ function QuestionStage({
           <div className="max-w-2xl text-left">{promptArea}</div>
         </div>
         <div className="flex w-full items-center justify-center md:w-[45%]">
-          <AnimatePresence>
-            {inputReady && (
+          <AnimatePresence mode="wait">
+            {isAnswering ? (
+              <motion.div
+                key="answering"
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.97 }}
+                transition={{ duration: 0.2 }}
+                className="w-full max-w-2xl rounded-3xl bg-white p-8 text-black shadow-2xl flex items-center justify-center min-h-[120px]"
+              >
+                <ThinkingDots />
+              </motion.div>
+            ) : inputReady ? (
               <motion.div
                 key="input-card"
                 initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -636,7 +646,7 @@ function QuestionStage({
               >
                 {inputArea}
               </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
         </div>
       </div>
@@ -651,8 +661,18 @@ function QuestionStage({
 
       {promptArea}
 
-      <AnimatePresence>
-        {inputReady && (
+      <AnimatePresence mode="wait">
+        {isAnswering ? (
+          <motion.div
+            key="answering"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ThinkingDots />
+          </motion.div>
+        ) : inputReady ? (
           <motion.div
             key="input-area"
             initial={{ opacity: 0, y: 14 }}
@@ -661,7 +681,7 @@ function QuestionStage({
           >
             {inputArea}
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
     </div>
   );
@@ -678,6 +698,7 @@ function FollowUpStage({
   ttsDone,
   showFallbackCopy,
   splitLayout,
+  isAnswering,
 }: {
   prompt: string;
   inputType: "voice" | "text";
@@ -687,6 +708,7 @@ function FollowUpStage({
   ttsDone: boolean;
   showFallbackCopy: boolean;
   splitLayout?: boolean;
+  isAnswering?: boolean;
 }) {
   const stubQuestion = {
     id: `followup-${prompt}`,
@@ -711,6 +733,7 @@ function FollowUpStage({
       showFallbackCopy={showFallbackCopy}
       preamble="One more thing…"
       splitLayout={splitLayout}
+      isAnswering={isAnswering}
     />
   );
 }
@@ -783,6 +806,8 @@ export function RespondentFlow({
   const [nullReason, setNullReason] = useState<NullReflectionReason | null>(null);
   const [nullDebugInfo, setNullDebugInfo] = useState<string | null>(null);
   const [avatarMode, setAvatarMode] = useState<AvatarMode>("idle");
+  // True while /api/answers is in-flight — gives instant UI feedback on submit
+  const [isAnswering, setIsAnswering] = useState(false);
   const pendingReflectionRef = useRef<ReflectionResult | null>(null);
   const pendingNullReasonRef = useRef<NullReflectionReason | null>(null);
   const pendingNullDebugInfoRef = useRef<string | null>(null);
@@ -1111,6 +1136,7 @@ export function RespondentFlow({
     pendingNullReasonRef.current = null;
     pendingNullDebugInfoRef.current = null;
     setIsSpeaking(false);
+    setIsAnswering(false);
     setAvatarMode("thinking");
     if (questionIndex + 1 < questions.length) {
       setQuestionIndex((i) => i + 1);
@@ -1123,6 +1149,7 @@ export function RespondentFlow({
 
   async function handleAnswer(rawValue: unknown, transcript?: string) {
     const currentQuestion = questions[questionIndex];
+    setIsAnswering(true);
 
     // Name question: capture locally, fire the answers POST (which mirrors to
     // sessions.respondent_name), then advance. No reflection, no follow-up.
@@ -1239,6 +1266,7 @@ export function RespondentFlow({
 
   async function handleFollowUpAnswer(rawValue: unknown, transcript?: string) {
     const currentQuestion = questions[questionIndex];
+    setIsAnswering(true);
     let followUpReflection: ReflectionResult | null = null;
     if (sessionId && currentQuestion) {
       try {
@@ -1297,6 +1325,7 @@ export function RespondentFlow({
     setFollowUpPrompt(null);
     setIsSpeaking(false);
     setAvatarMode("idle");
+    setIsAnswering(false);
     if (ref) playWhoosh();
     playTick();
     if (stageTransitionTimerRef.current) {
@@ -1409,6 +1438,7 @@ export function RespondentFlow({
                 ttsDone={narrationDone}
                 showFallbackCopy={showFallbackCopy}
                 splitLayout
+                isAnswering={isAnswering}
               />
             </motion.div>
           )}
@@ -1428,6 +1458,7 @@ export function RespondentFlow({
                 ttsDone={narrationDone}
                 showFallbackCopy={showFallbackCopy}
                 splitLayout
+                isAnswering={isAnswering}
               />
             </motion.div>
           )}
