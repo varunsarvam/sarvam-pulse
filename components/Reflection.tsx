@@ -286,6 +286,56 @@ function EmotionWash({ payload }: { payload: Record<string, unknown> }) {
   );
 }
 
+// ── Sticker reaction button ───────────────────────────────────────────────────
+
+const STICKER_ROTATIONS = [-6, 4, -3, 7];
+
+function StickerButton({
+  emoji,
+  index,
+  reacted,
+  onReact,
+  isMe,
+}: {
+  emoji: string;
+  index: number;
+  reacted: string | null;
+  onReact: () => void;
+  isMe: boolean;
+}) {
+  const baseRotate = STICKER_ROTATIONS[index % STICKER_ROTATIONS.length];
+  const isDimmed = reacted !== null && !isMe;
+
+  return (
+    <motion.button
+      onClick={(e) => { e.stopPropagation(); onReact(); }}
+      disabled={reacted !== null}
+      initial={{ rotate: baseRotate, scale: 1 }}
+      animate={{
+        rotate: isMe ? 0 : baseRotate,
+        scale: isDimmed ? 0.8 : 1,
+        opacity: isDimmed ? 0.25 : 1,
+        filter: isDimmed ? "grayscale(0.4)" : "grayscale(0)",
+      }}
+      whileHover={reacted === null ? { rotate: 0, scale: 1.28, y: -6 } : {}}
+      whileTap={reacted === null ? { scale: 0.88 } : {}}
+      transition={{ type: "spring", stiffness: 340, damping: 20 }}
+      className="cursor-pointer text-4xl leading-none select-none disabled:cursor-default"
+      style={{
+        filter: `drop-shadow(0 4px 8px rgba(0,0,0,0.18)) drop-shadow(0 1px 2px rgba(0,0,0,0.12))`,
+      }}
+    >
+      <motion.span
+        animate={isMe ? { scale: [1, 1.6, 1.1, 1.3], y: [0, -18, 3, -5] } : {}}
+        transition={isMe ? { duration: 0.5, ease: "easeOut" } : undefined}
+        style={{ display: "inline-block" }}
+      >
+        {emoji}
+      </motion.span>
+    </motion.button>
+  );
+}
+
 // ── Main Reflection component ────────────────────────────────────────────────
 
 export function Reflection({
@@ -442,39 +492,15 @@ export function Reflection({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45, duration: 0.2 }}
             >
-              {REACTIONS.map(({ key, emoji }) => (
-                <motion.button
+              {REACTIONS.map(({ key, emoji }, i) => (
+                <StickerButton
                   key={key}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleReaction(key);
-                  }}
-                  disabled={reacted !== null}
-                  whileHover={reacted === null ? { scale: 1.18, y: -3 } : {}}
-                  whileTap={reacted === null ? { scale: 0.9 } : {}}
-                  className={[
-                    "relative flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-3xl transition-colors duration-150",
-                    reacted === null
-                      ? "cursor-pointer hover:border-zinc-300 hover:bg-zinc-50"
-                      : "cursor-default",
-                    reacted !== null && reacted !== key ? "opacity-30" : "",
-                  ].join(" ")}
-                >
-                  <motion.span
-                    animate={
-                      reacted === key
-                        ? { scale: [1, 1.55, 1.1, 1.25], y: [0, -14, 2, -4] }
-                        : {}
-                    }
-                    transition={
-                      reacted === key
-                        ? { duration: 0.45, ease: "easeOut" }
-                        : undefined
-                    }
-                  >
-                    {emoji}
-                  </motion.span>
-                </motion.button>
+                  emoji={emoji}
+                  index={i}
+                  reacted={reacted}
+                  onReact={() => { handleReaction(key); }}
+                  isMe={reacted === key}
+                />
               ))}
             </motion.div>
 
