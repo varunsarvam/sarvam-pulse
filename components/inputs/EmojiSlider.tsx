@@ -123,7 +123,7 @@ export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSlide
     <div className="flex w-full flex-col gap-5 py-2">
 
       {/* ── 3×2 grid ── */}
-      <div className="grid grid-cols-3 gap-x-0 gap-y-6">
+      <div className="grid grid-cols-3 gap-x-0 gap-y-10">
         {STEPS.map((s) => (
           <EmojiCard
             key={s.value}
