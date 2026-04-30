@@ -317,13 +317,7 @@ function EmotionWash({ payload }: { payload: Record<string, unknown> }) {
 
 // ── Sticker reaction button ───────────────────────────────────────────────────
 
-const STICKER_ROTATIONS = [-6, 4, -3, 7];
-
-// Thick die-cut stroke in very light grey, no shadow
-const STICKER_FILTER =
-  "drop-shadow(4px 0 0 #efefef) drop-shadow(-4px 0 0 #efefef) drop-shadow(0 4px 0 #efefef) drop-shadow(0 -4px 0 #efefef) drop-shadow(3px 3px 0 #efefef) drop-shadow(-3px 3px 0 #efefef) drop-shadow(3px -3px 0 #efefef) drop-shadow(-3px -3px 0 #efefef)";
-const STICKER_FILTER_HOVER =
-  "drop-shadow(4px 0 0 #efefef) drop-shadow(-4px 0 0 #efefef) drop-shadow(0 4px 0 #efefef) drop-shadow(0 -4px 0 #efefef) drop-shadow(3px 3px 0 #efefef) drop-shadow(-3px 3px 0 #efefef) drop-shadow(3px -3px 0 #efefef) drop-shadow(-3px -3px 0 #efefef)";
+const STICKER_ROTATIONS = [-7, 5, -4, 8, -3];
 
 function StickerButton({
   emoji,
@@ -338,7 +332,6 @@ function StickerButton({
   onReact: () => void;
   isMe: boolean;
 }) {
-  const [hovered, setHovered] = useState(false);
   const baseRotate = STICKER_ROTATIONS[index % STICKER_ROTATIONS.length];
   const isDimmed = reacted !== null && !isMe;
 
@@ -349,28 +342,36 @@ function StickerButton({
       initial={{ rotate: baseRotate }}
       animate={{
         rotate: isMe ? 0 : baseRotate,
-        scale: isDimmed ? 0.75 : 1,
-        opacity: isDimmed ? 0.2 : 1,
+        scale: isDimmed ? 0.72 : 1,
+        opacity: isDimmed ? 0.22 : 1,
       }}
-      whileHover={reacted === null ? { rotate: 0, scale: 1.35, y: -8 } : {}}
-      whileTap={reacted === null ? { scale: 0.9 } : {}}
-      onHoverStart={() => setHovered(true)}
-      onHoverEnd={() => setHovered(false)}
-      transition={{ type: "spring", stiffness: 340, damping: 20 }}
+      whileHover={reacted === null ? { rotate: 0, scale: 1.32, y: -10 } : {}}
+      whileTap={reacted === null ? { scale: 0.88 } : {}}
+      transition={{ type: "spring", stiffness: 360, damping: 22 }}
       className="cursor-pointer select-none disabled:cursor-default"
-      style={{
-        fontSize: "2.4rem",
-        lineHeight: 1,
-        filter: hovered ? STICKER_FILTER_HOVER : STICKER_FILTER,
-      }}
     >
-      <motion.span
-        animate={isMe ? { scale: [1, 1.65, 1.1, 1.3], y: [0, -20, 3, -5] } : {}}
-        transition={isMe ? { duration: 0.5, ease: "easeOut" } : undefined}
-        style={{ display: "inline-block" }}
+      {/* White sticker backing — shadow + ring on the shape, not the emoji */}
+      <div
+        style={{
+          width: 58,
+          height: 58,
+          borderRadius: 18,
+          background: "#ffffff",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "2rem",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.10), 0 0 0 1.5px rgba(0,0,0,0.07)",
+        }}
       >
-        {emoji}
-      </motion.span>
+        <motion.span
+          animate={isMe ? { scale: [1, 1.6, 1.1, 1.28], y: [0, -18, 3, -4] } : {}}
+          transition={isMe ? { duration: 0.48, ease: "easeOut" } : undefined}
+          style={{ display: "inline-block" }}
+        >
+          {emoji}
+        </motion.span>
+      </div>
     </motion.button>
   );
 }
