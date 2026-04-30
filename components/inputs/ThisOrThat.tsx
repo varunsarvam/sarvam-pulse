@@ -11,7 +11,7 @@ interface ThisOrThatProps {
   disabled?: boolean;
 }
 
-const HOVER_BLUE = "#2d3fc7";
+const HOVER_BLUE = "#276040";
 
 export function ThisOrThat({ question, options, onSubmit, disabled = false }: ThisOrThatProps) {
   const [hovered, setHovered] = useState<0 | 1 | null>(null);
