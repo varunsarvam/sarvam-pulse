@@ -465,6 +465,14 @@ function QuestionStage({
   splitLayout?: boolean;
 }) {
   const { input_type, options } = question;
+  // These props remain on the API but are no longer used inside QuestionStage
+  // after Phase 2.5 moved phrase fetching to the parent's preload pipeline.
+  // Marking as intentional-unused to silence lint without changing the call-site
+  // contract.
+  void sessionId;
+  void tone;
+  void formIntent;
+  void respondentName;
   const [phrased, setPhrased] = useState<string | null>(null);
   const [thinking, setThinking] = useState(true);
   const [pendingTypewriterText, setPendingTypewriterText] = useState<string | null>(null);
@@ -476,12 +484,11 @@ function QuestionStage({
   const displayedRef = useRef<string>("");
   const typingActiveRef = useRef(false);
   const streamDoneRef = useRef(false);
-  const firstCharRef = useRef(false);
   const typewriterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ttsFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Stable ref for onPhrasedReady so the fetch effect doesn't re-run on re-renders
+  // Stable ref for onPhrasedReady so the trigger effects don't re-run on re-renders
   const onPhrasedReadyRef = useRef(onPhrasedReady);
   useEffect(() => { onPhrasedReadyRef.current = onPhrasedReady; }, [onPhrasedReady]);
 
@@ -543,13 +550,28 @@ function QuestionStage({
     startTypewriter();
   }
 
-  useEffect(() => {
-    let cancelled = false;
-    let ttsTriggered = false;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+  /**
+   * Hand a phrased text (and optional preloaded audio URL) to the parent's
+   * TTS pipeline AND seed the local typewriter state. After Phase 2.5's
+   * preload pipeline took over phrase fetching, this is the only way the
+   * QuestionStage publishes a question's phrasing — there is no in-component
+   * fetch anymore. Idempotency is provided by the callers (the main + watcher
+   * effects guard on `pendingTypewriterText` / `question.input_type`).
+   */
+  function queueForTtsThenType(text: string, audioUrl?: string | null) {
+    onPhrasedReadyRef.current(text, audioUrl);
+    setPendingTypewriterText(text);
+    if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
+    ttsFallbackTimerRef.current = setTimeout(() => {
+      if (!typingActiveRef.current) startTypewriterWithText(text);
+    }, 5000);
+  }
 
-    // Reset all typewriter state for the new question
+  // Main per-question effect — only runs when the question changes. Resets
+  // local typewriter state and, if the phrasing is already known at mount
+  // time, fires queueForTtsThenType immediately. Otherwise the watcher
+  // effect below picks it up when `preloaded` lands.
+  useEffect(() => {
     if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
     if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
     if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
@@ -557,157 +579,51 @@ function QuestionStage({
     displayedRef.current = "";
     typingActiveRef.current = false;
     streamDoneRef.current = false;
-    firstCharRef.current = false;
 
     setPhrased(null);
     setThinking(true);
     setInputReady(false);
     setPendingTypewriterText(null);
 
-    function queueForTtsThenType(text: string, audioUrl?: string | null) {
-      ttsTriggered = true;
-      onPhrasedReadyRef.current(text, audioUrl);
-      setPendingTypewriterText(text);
-      ttsFallbackTimerRef.current = setTimeout(() => {
-        if (!typingActiveRef.current) startTypewriterWithText(text);
-      }, 5000);
-    }
-
-    if (preloaded) {
-      clearTimeout(timeout);
-      queueForTtsThenType(preloaded.phrased, preloaded.audioUrl);
-      return () => {
-        cancelled = true;
-        if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
-        if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
-        if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
-      };
-    }
-
-    // ── Name questions: skip phrase fetch, use constant + live TTS ──
     if (question.input_type === "name") {
-      clearTimeout(timeout);
+      // Name question — phrasing is the constant from the schema layer; no
+      // preload involved. Audio URL is left blank so TTSPlayer fetches it.
       queueForTtsThenType(NAME_QUESTION_PROMPT);
-      return () => {
-        cancelled = true;
-        if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
-        if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
-        if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
-      };
+    } else if (preloaded) {
+      // Preload was already populated by the parent before we mounted.
+      queueForTtsThenType(preloaded.phrased, preloaded.audioUrl);
+    } else if (question.position === -1) {
+      // Follow-up stub (FollowUpStage uses position -1). The follow-up
+      // endpoint already returns tone-aware prompt text; treat it as the
+      // phrasing directly. No preload is ever produced for follow-ups.
+      queueForTtsThenType(question.prompt);
     }
-
-    // ── Client-side sessionStorage cache ──
-    const clientCacheKey =
-      sessionId ? `phrase:${sessionId}:${question.id}` : null;
-
-    if (clientCacheKey && typeof sessionStorage !== "undefined") {
-      const cached = sessionStorage.getItem(clientCacheKey);
-      if (cached) {
-        clearTimeout(timeout);
-        queueForTtsThenType(cached);
-        return () => {
-          cancelled = true;
-          if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
-        };
-      }
-    }
-
-    fetch("/api/phrase-question", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        question_prompt: question.prompt,
-        tone,
-        form_intent: formIntent,
-        session_id: sessionId,
-        respondent_name: respondentName,
-        input_type: question.input_type,
-      }),
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        if (cancelled) return;
-        clearTimeout(timeout);
-
-        const ct = res.headers.get("content-type") ?? "";
-
-        if (ct.includes("application/json")) {
-          const { phrased: p } = (await res.json()) as { phrased?: string };
-          if (!cancelled) {
-            const text = p || question.prompt;
-            if (p && clientCacheKey && typeof sessionStorage !== "undefined") {
-              sessionStorage.setItem(clientCacheKey, p);
-            }
-            queueForTtsThenType(text);
-          }
-          return;
-        }
-
-        // ── SSE stream → typewriter queue ──
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let sseBuffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done || cancelled) break;
-
-          sseBuffer += decoder.decode(value, { stream: true });
-          const lines = sseBuffer.split("\n");
-          sseBuffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const data = line.slice(6).trim();
-
-            try {
-              const parsed = JSON.parse(data) as Record<string, unknown>;
-
-              if (typeof parsed.chunk === "string") {
-                // The LLM stream is now fast enough to buffer. Starting the
-                // visible typewriter on final text lets TTS start at the same time.
-              } else if (parsed.done && typeof parsed.phrased === "string") {
-                if (clientCacheKey && typeof sessionStorage !== "undefined") {
-                  sessionStorage.setItem(clientCacheKey, parsed.phrased);
-                }
-                queueForTtsThenType(parsed.phrased);
-              } else if (parsed.error) {
-                const fallback =
-                  typeof parsed.fallback === "string"
-                    ? parsed.fallback
-                    : question.prompt;
-                queueForTtsThenType(fallback);
-              }
-            } catch {
-              // skip malformed SSE lines
-            }
-          }
-        }
-
-        if (!cancelled && !ttsTriggered) {
-          // SSE ended without a `done` event — fall back to the raw prompt
-          // and still play TTS so the user hears the question.
-          queueForTtsThenType(question.prompt);
-        }
-      })
-      .catch(() => {
-        if (!cancelled && !ttsTriggered) {
-          // phrase-question failed or aborted (timeout) — play TTS for the
-          // raw prompt rather than leaving the user with silent text.
-          queueForTtsThenType(question.prompt);
-        }
-      });
+    // Otherwise: wait for the watcher below to fire when `preloaded` lands.
+    // No fetch is performed here — Phase 2.5's preload pipeline owns that.
 
     return () => {
-      cancelled = true;
-      controller.abort();
-      clearTimeout(timeout);
       if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
       if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
       if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
     };
+  // sessionId / respondentName / tone / formIntent intentionally omitted —
+  // the trigger is question identity; other context flows through props
+  // and is read at use-time via refs/closures of the helpers above.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question.id]);
+
+  // Watcher: fires when `preloaded` flips from null → populated AFTER the
+  // QuestionStage mounted (the parent's preloadCacheRef-to-state sync runs
+  // one render late on questionIndex change). Idempotent via the
+  // `pendingTypewriterText` guard so a same-mount preload doesn't double-fire.
+  useEffect(() => {
+    if (!preloaded) return;
+    if (question.input_type === "name") return;
+    if (pendingTypewriterText) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    queueForTtsThenType(preloaded.phrased, preloaded.audioUrl);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preloaded?.phrased, preloaded?.audioUrl, question.id]);
 
   function handleVoice(v: { type: "voice"; value: string; audioBlob: Blob }) {
     onAnswer({ type: "voice", value: v.value }, v.value);
@@ -1483,18 +1399,13 @@ export function RespondentFlow({
     <div className="relative h-screen overflow-hidden">
       <div className="fixed inset-0 z-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
       <PresenceShader mode={shaderMode} className="fixed inset-0 z-0" />
-      {/* Cover the blue shader on the complete screen — color from round-robin palette */}
-      {stage === "COMPLETE" && (() => {
-        const palette = getCardPalette(sessionId);
-        return (
-          <div
-            className="fixed inset-0 z-[1]"
-            style={{
-              background: `radial-gradient(ellipse 70% 55% at 50% 38%, ${palette.colors[0]}28, transparent 65%), ${palette.colorBack}`,
-            }}
-          />
-        );
-      })()}
+      {/* Cover the blue shader on the complete screen — solid color from round-robin palette */}
+      {stage === "COMPLETE" && (
+        <div
+          className="fixed inset-0 z-[1]"
+          style={{ background: getCardPalette(sessionId).colorBack }}
+        />
+      )}
       {/* ── Mute toggle — fixed overlay, always accessible ── */}
       <button
         onClick={toggleMute}
@@ -1518,7 +1429,7 @@ export function RespondentFlow({
       {phrasedForTTS && (stage === "QUESTION" || stage === "FOLLOWUP") && (
         <div className="fixed bottom-4 left-4 z-50">
           <TTSPlayer
-            key={`tts-${stage}-${questionIndex}-${phrasedForTTS}`}
+            key={`tts-${stage}-${questionIndex}`}
             text={phrasedForTTS}
             tone={form.tone}
             muted={muted}
