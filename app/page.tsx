@@ -47,15 +47,6 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
-        <header>
-          <p className="text-xs font-medium tracking-[0.24em] uppercase text-muted-foreground">
-            Pulse
-          </p>
-          <h1 className="mt-1 text-4xl font-bold tracking-tight">
-            Conversational forms
-          </h1>
-        </header>
-
         <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {forms.map((form, index) => {
             const count = counts.get(form.id) ?? {
