@@ -453,9 +453,9 @@ export function Reflection({
                   whileHover={reacted === null ? { scale: 1.18, y: -3 } : {}}
                   whileTap={reacted === null ? { scale: 0.9 } : {}}
                   className={[
-                    "relative flex h-16 w-16 items-center justify-center rounded-2xl border border-border/60 bg-card/60 text-3xl shadow-sm transition-colors duration-150",
+                    "relative flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-3xl transition-colors duration-150",
                     reacted === null
-                      ? "cursor-pointer hover:border-foreground/20 hover:bg-muted/50 hover:shadow-md"
+                      ? "cursor-pointer hover:border-zinc-300 hover:bg-zinc-50"
                       : "cursor-default",
                     reacted !== null && reacted !== key ? "opacity-30" : "",
                   ].join(" ")}
@@ -590,11 +590,11 @@ export function Reflection({
               className={[
                 "relative flex items-center justify-center",
                 "h-16 w-16 rounded-2xl text-3xl",
-                "border border-border/60 bg-card/60 backdrop-blur",
-                "shadow-sm transition-colors duration-150",
+                "border border-zinc-200 bg-white",
+                "transition-colors duration-150",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 reacted === null
-                  ? "hover:border-foreground/20 hover:bg-muted/50 hover:shadow-md cursor-pointer"
+                  ? "hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer"
                   : "cursor-default",
                 reacted !== null && reacted !== key ? "opacity-30" : "",
               ].join(" ")}

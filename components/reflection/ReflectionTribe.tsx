@@ -33,7 +33,7 @@ export function ReflectionTribe({ copy, quotes, hideHeadline = false }: Reflecti
         {visibleQuotes.map((quote, index) => (
           <motion.div
             key={`${index}-${quote}`}
-            className="rounded-xl border border-foreground/[0.1] bg-foreground/[0.07] px-5 py-3 shadow-sm"
+            className="rounded-2xl border border-zinc-200 bg-white px-5 py-4"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, transition: { duration: 0.3 } }}
@@ -43,10 +43,10 @@ export function ReflectionTribe({ copy, quotes, hideHeadline = false }: Reflecti
               ease: "easeOut",
             }}
           >
-            <p className="text-sm italic leading-relaxed text-muted-foreground/90">
+            <p className="text-sm leading-relaxed text-zinc-700">
               &ldquo;{truncateQuote(quote)}&rdquo;
             </p>
-            <p className="mt-2 text-xs text-muted-foreground/50">
+            <p className="mt-2 text-xs text-zinc-400">
               — anonymous
             </p>
           </motion.div>
