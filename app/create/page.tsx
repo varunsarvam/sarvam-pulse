@@ -1,504 +1,620 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { InputType, FormTone } from "@/lib/types";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, Trash2 } from "lucide-react";
+import type { FormTone } from "@/lib/types";
 
-// ─── Local draft types ────────────────────────────────────────────────────────
+// =============================================================================
+// Types
+// =============================================================================
 
-interface VisualOption {
-  label: string;
-  image_url: string;
-}
+/**
+ * Creator-facing input types — `name` is excluded because the form-generation
+ * pipeline auto-inserts the name question (Phase 1 architectural decision).
+ * Keeping this enum locally so the dropdown's options can never accidentally
+ * include `name`.
+ */
+type CreatorInputType =
+  | "voice"
+  | "text"
+  | "emoji_slider"
+  | "cards"
+  | "ranking"
+  | "this_or_that"
+  | "visual_select";
+
+const INPUT_TYPE_OPTIONS: { value: CreatorInputType; label: string; hint: string }[] = [
+  { value: "voice", label: "Voice", hint: "1–3 sentences spoken" },
+  { value: "text", label: "Text", hint: "1–3 sentences typed" },
+  { value: "emoji_slider", label: "Emoji slider", hint: "0–100 with two endpoint labels" },
+  { value: "cards", label: "Cards", hint: "Pick one from 4–6 options" },
+  { value: "ranking", label: "Ranking", hint: "Drag-rank 4 items" },
+  { value: "this_or_that", label: "This or that", hint: "Pick one of two contrasts" },
+  { value: "visual_select", label: "Visual select", hint: "Pick a visual concept" },
+];
 
 interface DraftQuestion {
   _id: string;
-  prompt: string;
   intent: string;
-  input_type: InputType;
-  options: string[] | VisualOption[];
-  follow_up_enabled: boolean;
-  required: boolean;
+  input_type: CreatorInputType;
 }
 
-function makeQuestion(): DraftQuestion {
-  return {
-    _id: crypto.randomUUID(),
-    prompt: "",
-    intent: "",
-    input_type: "voice",
-    options: [],
-    follow_up_enabled: false,
-    required: true,
-  };
-}
-
-const OPTIONS_TYPES: InputType[] = [
-  "cards",
-  "ranking",
-  "this_or_that",
-  "visual_select",
+const TONE_OPTIONS: { value: FormTone; label: string; description: string }[] = [
+  { value: "playful", label: "Playful", description: "warm, conversational, a touch of wit" },
+  { value: "calm", label: "Calm", description: "slow, considered, gentle" },
+  { value: "direct", label: "Direct", description: "crisp, no preamble" },
+  { value: "insightful", label: "Insightful", description: "evocative, thoughtful" },
 ];
 
-const INPUT_TYPE_LABELS: Record<InputType, string> = {
-  name: "Name",
-  voice: "Voice",
-  text: "Text",
-  emoji_slider: "Emoji Slider",
-  cards: "Cards",
-  ranking: "Ranking",
-  this_or_that: "This or That",
-  visual_select: "Visual Select",
-};
+// =============================================================================
+// Validation
+// =============================================================================
 
-// ─── Options editor ───────────────────────────────────────────────────────────
+const TITLE_MIN = 1;
+const TITLE_MAX = 100;
+const INTENT_MIN = 10;
+const INTENT_MAX = 300;
+const Q_INTENT_MIN = 10;
+const Q_INTENT_MAX = 200;
 
-function OptionsEditor({
-  inputType,
-  options,
-  onChange,
-}: {
-  inputType: InputType;
-  options: string[] | VisualOption[];
-  onChange: (opts: string[] | VisualOption[]) => void;
-}) {
-  const isVisual = inputType === "visual_select";
-  const isThisOrThat = inputType === "this_or_that";
-  const stringOpts = options as string[];
-  const visualOpts = options as VisualOption[];
-  const atMax = isThisOrThat && stringOpts.length >= 2;
+interface ValidationErrors {
+  title?: string;
+  intent?: string;
+  questions?: Record<string, string>;
+}
 
-  function addOption() {
-    if (isVisual) {
-      onChange([...visualOpts, { label: "", image_url: "" }]);
-    } else {
-      onChange([...stringOpts, ""]);
-    }
+function validate(state: {
+  title: string;
+  intent: string;
+  questions: DraftQuestion[];
+}): ValidationErrors | null {
+  const errors: ValidationErrors = {};
+  const t = state.title.trim();
+  if (t.length < TITLE_MIN) errors.title = "Give your form a title.";
+  else if (t.length > TITLE_MAX) errors.title = `Keep it under ${TITLE_MAX} characters.`;
+
+  const i = state.intent.trim();
+  if (i.length < INTENT_MIN)
+    errors.intent = `Tell us a bit more — at least ${INTENT_MIN} characters.`;
+  else if (i.length > INTENT_MAX)
+    errors.intent = `Keep it under ${INTENT_MAX} characters.`;
+
+  if (state.questions.length === 0) {
+    errors.questions = { _global: "Add at least one question." };
+  } else {
+    const qErrors: Record<string, string> = {};
+    state.questions.forEach((q) => {
+      const qi = q.intent.trim();
+      if (qi.length < Q_INTENT_MIN)
+        qErrors[q._id] = `At least ${Q_INTENT_MIN} characters — what do you want to know?`;
+      else if (qi.length > Q_INTENT_MAX)
+        qErrors[q._id] = `Keep it under ${Q_INTENT_MAX} characters.`;
+    });
+    if (Object.keys(qErrors).length > 0) errors.questions = qErrors;
   }
 
-  function removeOption(i: number) {
-    if (isVisual) {
-      onChange(visualOpts.filter((_, idx) => idx !== i));
-    } else {
-      onChange(stringOpts.filter((_, idx) => idx !== i));
-    }
+  if (
+    !errors.title &&
+    !errors.intent &&
+    !errors.questions
+  ) {
+    return null;
   }
+  return errors;
+}
 
-  function updateString(i: number, val: string) {
-    const next = [...stringOpts];
-    next[i] = val;
-    onChange(next);
-  }
+// =============================================================================
+// Loading state — stage-indicator copy
+// =============================================================================
 
-  function updateVisual(i: number, field: "label" | "image_url", val: string) {
-    const next = visualOpts.map((o, idx) =>
-      idx === i ? { ...o, [field]: val } : o
-    );
-    onChange(next);
-  }
+const LOADING_STAGES = [
+  { from: 0, copy: "Composing your questions in your tone…" },
+  { from: 12, copy: "Imagining ten different people answering…" },
+  { from: 26, copy: "Listening to how they'd respond…" },
+  { from: 40, copy: "Finding the patterns that make reflections meaningful…" },
+  { from: 52, copy: "Almost ready…" },
+];
+
+function GeneratingOverlay() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const t = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 500);
+    return () => clearInterval(t);
+  }, []);
+
+  const stage = [...LOADING_STAGES].reverse().find((s) => elapsed >= s.from)
+    ?? LOADING_STAGES[0];
 
   return (
-    <div className="space-y-2">
-      <Label className="text-xs text-muted-foreground">Options</Label>
-      {isVisual
-        ? visualOpts.map((opt, i) => (
-            <div key={i} className="flex gap-2 items-start">
-              <div className="flex-1 space-y-1">
-                <Input
-                  placeholder="Label"
-                  value={opt.label}
-                  onChange={(e) => updateVisual(i, "label", e.target.value)}
-                />
-                <Input
-                  placeholder="Image URL"
-                  value={opt.image_url}
-                  onChange={(e) => updateVisual(i, "image_url", e.target.value)}
-                />
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeOption(i)}
-                className="mt-1 shrink-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ))
-        : stringOpts.map((opt, i) => (
-            <div key={i} className="flex gap-2 items-center">
-              <Input
-                placeholder={`Option ${i + 1}`}
-                value={opt}
-                onChange={(e) => updateString(i, e.target.value)}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeOption(i)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={addOption}
-        disabled={atMax}
-        className="w-full"
-      >
-        <Plus className="h-3 w-3 mr-1" />
-        {isThisOrThat ? `Add option (${stringOpts.length}/2)` : "Add option"}
-      </Button>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+      className="fixed inset-0 z-50 flex items-center justify-center"
+    >
+      <div className="absolute inset-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
+      {/* Soft pulsing tint to give the wait some life */}
+      <motion.div
+        className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.07),transparent_70%)]"
+        animate={{ opacity: [0.5, 0.9, 0.5] }}
+        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className="relative z-10 flex max-w-xl flex-col items-center gap-8 px-8 text-center">
+        {/* Single soft dot, slow pulse */}
+        <motion.div
+          className="h-3 w-3 rounded-full bg-white"
+          style={{ boxShadow: "0 0 24px rgba(255,255,255,0.65)" }}
+          animate={{ scale: [1, 1.35, 1], opacity: [0.7, 1, 0.7] }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={stage.from}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="font-display text-[1.6rem] leading-snug text-white md:text-[2rem]"
+          >
+            {stage.copy}
+          </motion.p>
+        </AnimatePresence>
+        <p className="font-matter text-sm text-white/55">
+          This takes about a minute. Don&apos;t close the tab.
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+// =============================================================================
+// Tone picker
+// =============================================================================
+
+function TonePicker({
+  value,
+  onChange,
+}: {
+  value: FormTone;
+  onChange: (t: FormTone) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {TONE_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={
+              "rounded-full border px-4 py-2 text-sm font-medium transition-all " +
+              (active
+                ? "border-zinc-900 bg-zinc-900 text-white"
+                : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300")
+            }
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-// ─── Toggle ───────────────────────────────────────────────────────────────────
+// =============================================================================
+// Question row
+// =============================================================================
 
-function Toggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "flex items-center gap-2 text-sm select-none rounded px-2 py-1 transition-colors",
-        checked
-          ? "bg-primary text-primary-foreground"
-          : "bg-muted text-muted-foreground hover:bg-muted/80"
-      )}
-    >
-      <span
-        className={cn(
-          "inline-block h-3 w-3 rounded-full border-2",
-          checked ? "bg-primary-foreground border-primary-foreground" : "border-muted-foreground"
-        )}
-      />
-      {label}
-    </button>
-  );
-}
-
-// ─── Question card ────────────────────────────────────────────────────────────
-
-function QuestionCard({
+function QuestionRow({
   question,
   index,
+  canRemove,
+  error,
   onChange,
-  onDelete,
+  onRemove,
 }: {
   question: DraftQuestion;
   index: number;
+  canRemove: boolean;
+  error?: string;
   onChange: (q: DraftQuestion) => void;
-  onDelete: () => void;
+  onRemove: () => void;
 }) {
-  const needsOptions = OPTIONS_TYPES.includes(question.input_type);
-
-  function set<K extends keyof DraftQuestion>(key: K, value: DraftQuestion[K]) {
-    onChange({ ...question, [key]: value });
-  }
-
-  function handleTypeChange(type: InputType) {
-    const needsOpts = OPTIONS_TYPES.includes(type);
-    const wasVisual = question.input_type === "visual_select";
-    const isVisual = type === "visual_select";
-    let options: string[] | VisualOption[] = question.options as string[];
-
-    if (!needsOpts) {
-      options = [];
-    } else if (wasVisual && !isVisual) {
-      options = (question.options as VisualOption[]).map((o) => o.label);
-    } else if (!wasVisual && isVisual) {
-      options = (question.options as string[]).map((l) => ({
-        label: l,
-        image_url: "",
-      }));
-    } else if (type === "this_or_that") {
-      options = (question.options as string[]).slice(0, 2);
-    }
-
-    onChange({ ...question, input_type: type, options });
-  }
-
+  const inputTypeMeta = INPUT_TYPE_OPTIONS.find((o) => o.value === question.input_type);
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Question {index + 1}
-          </CardTitle>
-          <Button variant="ghost" size="icon" onClick={onDelete}>
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-1">
-          <Label>Prompt</Label>
-          <Textarea
-            placeholder="What do you want to ask?"
-            value={question.prompt}
-            onChange={(e) => set("prompt", e.target.value)}
-            rows={2}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <Label>
-            Intent{" "}
-            <span className="text-xs text-muted-foreground">(optional)</span>
-          </Label>
-          <Input
-            placeholder="What are you trying to learn?"
-            value={question.intent}
-            onChange={(e) => set("intent", e.target.value)}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <Label>Input type</Label>
-          <Select
-            value={question.input_type}
-            onValueChange={(v) => handleTypeChange(v as InputType)}
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className="rounded-2xl bg-white p-5 shadow-[0_2px_18px_rgba(8,18,40,0.06)]"
+    >
+      <div className="flex items-center justify-between pb-4">
+        <p className="font-matter text-sm font-medium text-zinc-400">
+          Question {index + 1}
+        </p>
+        {canRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Remove question ${index + 1}`}
+            className="rounded-full p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
           >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(INPUT_TYPE_LABELS) as InputType[]).map((t) => (
-                <SelectItem key={t} value={t}>
-                  {INPUT_TYPE_LABELS[t]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {needsOptions && (
-          <OptionsEditor
-            inputType={question.input_type}
-            options={question.options}
-            onChange={(opts) => set("options", opts)}
-          />
+            <Trash2 className="h-4 w-4" />
+          </button>
         )}
+      </div>
 
-        <div className="flex gap-2 flex-wrap pt-1">
-          <Toggle
-            label="Follow-up"
-            checked={question.follow_up_enabled}
-            onChange={(v) => set("follow_up_enabled", v)}
+      <div className="space-y-4">
+        <div>
+          <label className="font-matter mb-2 block text-sm font-medium text-zinc-500">
+            What do you want to know?
+          </label>
+          <textarea
+            placeholder="e.g. how anxious people feel about AI taking jobs"
+            value={question.intent}
+            onChange={(e) => onChange({ ...question, intent: e.target.value })}
+            rows={2}
+            maxLength={Q_INTENT_MAX + 20}
+            className={
+              "font-matter w-full resize-none rounded-xl border bg-white px-4 py-3 text-[15px] leading-relaxed text-zinc-900 outline-none transition-colors placeholder:text-zinc-300 " +
+              (error
+                ? "border-red-300 focus:border-red-400"
+                : "border-zinc-200 focus:border-zinc-400")
+            }
           />
-          <Toggle
-            label="Required"
-            checked={question.required}
-            onChange={(v) => set("required", v)}
-          />
+          {error && (
+            <p className="font-matter mt-2 text-xs text-red-500">{error}</p>
+          )}
         </div>
-      </CardContent>
-    </Card>
+
+        <div>
+          <label className="font-matter mb-2 block text-sm font-medium text-zinc-500">
+            How should they answer?
+          </label>
+          <div className="relative">
+            <select
+              value={question.input_type}
+              onChange={(e) =>
+                onChange({
+                  ...question,
+                  input_type: e.target.value as CreatorInputType,
+                })
+              }
+              className="font-matter w-full appearance-none rounded-xl border border-zinc-200 bg-white px-4 py-3 pr-10 text-[15px] text-zinc-900 outline-none transition-colors focus:border-zinc-400"
+            >
+              {INPUT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+              ▾
+            </span>
+          </div>
+          {inputTypeMeta && (
+            <p className="font-matter mt-2 text-xs text-zinc-400">
+              {inputTypeMeta.hint}
+            </p>
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// =============================================================================
+// Page
+// =============================================================================
 
 export default function CreatePage() {
   const router = useRouter();
-
   const [title, setTitle] = useState("");
   const [intent, setIntent] = useState("");
-  const [tone, setTone] = useState<FormTone>("playful");
-  const [questions, setQuestions] = useState<DraftQuestion[]>([makeQuestion()]);
-  const [publishing, setPublishing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [tone, setTone] = useState<FormTone>("insightful");
+  const [anonymous, setAnonymous] = useState(false);
+  const [questions, setQuestions] = useState<DraftQuestion[]>(() => [
+    { _id: crypto.randomUUID(), intent: "", input_type: "voice" },
+  ]);
 
-  function updateQuestion(i: number, q: DraftQuestion) {
-    setQuestions((qs) => qs.map((old, idx) => (idx === i ? q : old)));
-  }
-
-  function deleteQuestion(i: number) {
-    setQuestions((qs) => qs.filter((_, idx) => idx !== i));
-  }
+  const [errors, setErrors] = useState<ValidationErrors | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<{
+    kind: "validation" | "sarvam" | "generic";
+    message: string;
+  } | null>(null);
 
   function addQuestion() {
-    setQuestions((qs) => [...qs, makeQuestion()]);
+    setQuestions((qs) => [
+      ...qs,
+      { _id: crypto.randomUUID(), intent: "", input_type: "voice" },
+    ]);
   }
 
-  function validate(): string | null {
-    if (!title.trim()) return "Form title is required.";
-    if (questions.length === 0) return "Add at least one question.";
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      if (!q.prompt.trim()) return `Question ${i + 1} is missing a prompt.`;
-      if (OPTIONS_TYPES.includes(q.input_type)) {
-        if (q.input_type === "this_or_that") {
-          const opts = q.options as string[];
-          if (opts.length < 2 || opts.some((o) => !o.trim()))
-            return `Question ${i + 1} (This or That) requires exactly 2 non-empty options.`;
-        } else {
-          const opts = q.options as (string | VisualOption)[];
-          if (opts.length === 0)
-            return `Question ${i + 1} requires at least one option.`;
-        }
-      }
-    }
-    return null;
+  function removeQuestion(id: string) {
+    setQuestions((qs) => qs.filter((q) => q._id !== id));
   }
 
-  async function handlePublish() {
-    const err = validate();
-    if (err) {
-      setError(err);
+  function updateQuestion(updated: DraftQuestion) {
+    setQuestions((qs) => qs.map((q) => (q._id === updated._id ? updated : q)));
+  }
+
+  async function handleSubmit() {
+    setServerError(null);
+    const v = validate({ title, intent, questions });
+    if (v) {
+      setErrors(v);
       return;
     }
-    setError(null);
-    setPublishing(true);
+    setErrors(null);
+    setSubmitting(true);
 
     try {
-      const res = await fetch("/api/forms", {
+      const res = await fetch("/api/forms/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: title.trim(),
-          intent: intent.trim() || null,
+          formTitle: title.trim(),
+          formIntent: intent.trim(),
           tone,
-          questions: questions.map((q, i) => ({
-            position: i,
-            prompt: q.prompt.trim(),
-            intent: q.intent.trim() || null,
+          anonymous,
+          questionIntents: questions.map((q) => ({
+            intent: q.intent.trim(),
             input_type: q.input_type,
-            options: OPTIONS_TYPES.includes(q.input_type) ? q.options : null,
-            follow_up_enabled: q.follow_up_enabled,
-            required: q.required,
           })),
         }),
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Failed to publish.");
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+        } | null;
+        if (res.status === 400) {
+          setServerError({
+            kind: "validation",
+            message:
+              body?.message ?? body?.error ?? "Something in your form needs a tweak.",
+          });
+        } else if (res.status === 502) {
+          setServerError({
+            kind: "sarvam",
+            message:
+              "Couldn't generate your form right now — Sarvam is having trouble. Try again in a moment.",
+          });
+        } else {
+          setServerError({
+            kind: "generic",
+            message:
+              body?.message ??
+              body?.error ??
+              `Something went wrong (status ${res.status}).`,
+          });
+        }
+        setSubmitting(false);
+        return;
       }
 
-      const { id } = await res.json();
+      const { id } = (await res.json()) as { id: string };
+      // Successful generation — go straight to the live form. The takeover
+      // overlay stays mounted until the page navigates away, so the user
+      // doesn't see the form re-flash.
       router.push(`/respond/${id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-      setPublishing(false);
+      setServerError({
+        kind: "generic",
+        message: e instanceof Error ? e.message : "Network error.",
+      });
+      setSubmitting(false);
     }
   }
 
+  const titleErr = errors?.title;
+  const intentErr = errors?.intent;
+  const qErrs = errors?.questions ?? {};
+
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-2xl px-4 py-12 space-y-8">
+    <div className="relative min-h-screen w-full">
+      {/* Background — same image used by the respondent flow for visual continuity */}
+      <div className="fixed inset-0 z-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
+      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.04),transparent_60%)]" />
+
+      <div className="relative z-10 mx-auto w-full max-w-2xl px-6 py-16 md:px-8 md:py-20">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Create a form</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Build your Pulse form. Questions will be asked in order.
+        <div className="mb-10">
+          <h1 className="font-display text-[2.25rem] leading-tight tracking-tight text-white md:text-[2.875rem]">
+            Create a Pulse form
+          </h1>
+          <p className="font-matter mt-3 max-w-md text-[15px] leading-relaxed text-white/65">
+            Tell us what you want to learn. We&apos;ll generate the questions in your
+            voice, simulate ten people answering, and surface the patterns that
+            make reflections feel alive.
           </p>
         </div>
 
-        {/* Form meta */}
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div className="space-y-1">
-              <Label>Title</Label>
-              <Input
-                placeholder="e.g. Team retrospective"
+        {/* Form meta — single white card */}
+        <div className="rounded-2xl bg-white p-6 shadow-[0_2px_24px_rgba(8,18,40,0.08)] md:p-7">
+          <div className="space-y-6">
+            <div>
+              <label className="font-matter mb-2 block text-sm font-medium text-zinc-500">
+                Title
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Living with AI in 2026"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                maxLength={TITLE_MAX + 10}
+                className={
+                  "font-matter w-full rounded-xl border bg-white px-4 py-3 text-[15px] text-zinc-900 outline-none transition-colors placeholder:text-zinc-300 " +
+                  (titleErr
+                    ? "border-red-300 focus:border-red-400"
+                    : "border-zinc-200 focus:border-zinc-400")
+                }
               />
+              {titleErr && (
+                <p className="font-matter mt-2 text-xs text-red-500">{titleErr}</p>
+              )}
             </div>
-            <div className="space-y-1">
-              <Label>
-                Intent{" "}
-                <span className="text-xs text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                placeholder="What is this form trying to understand?"
+
+            <div>
+              <label className="font-matter mb-2 block text-sm font-medium text-zinc-500">
+                Intent
+              </label>
+              <textarea
+                placeholder="What do you want to learn from this form?"
                 value={intent}
                 onChange={(e) => setIntent(e.target.value)}
+                rows={3}
+                maxLength={INTENT_MAX + 20}
+                className={
+                  "font-matter w-full resize-none rounded-xl border bg-white px-4 py-3 text-[15px] leading-relaxed text-zinc-900 outline-none transition-colors placeholder:text-zinc-300 " +
+                  (intentErr
+                    ? "border-red-300 focus:border-red-400"
+                    : "border-zinc-200 focus:border-zinc-400")
+                }
               />
+              {intentErr ? (
+                <p className="font-matter mt-2 text-xs text-red-500">{intentErr}</p>
+              ) : (
+                <p className="font-matter mt-2 text-xs text-zinc-400">
+                  1–3 sentences. Beyond the headline — what would you actually want a respondent to say?
+                </p>
+              )}
             </div>
-            <div className="space-y-1">
-              <Label>Tone</Label>
-              <Select
-                value={tone}
-                onValueChange={(v) => setTone(v as FormTone)}
+
+            <div>
+              <label className="font-matter mb-2.5 block text-sm font-medium text-zinc-500">
+                Tone
+              </label>
+              <TonePicker value={tone} onChange={setTone} />
+              <p className="font-matter mt-2 text-xs text-zinc-400">
+                {TONE_OPTIONS.find((t) => t.value === tone)?.description}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setAnonymous((v) => !v)}
+              className={
+                "flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors " +
+                (anonymous
+                  ? "border-zinc-200 bg-zinc-50"
+                  : "border-zinc-150 bg-zinc-50 hover:bg-zinc-100")
+              }
+            >
+              <span
+                className={
+                  "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border " +
+                  (anonymous
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-zinc-300 bg-white")
+                }
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="playful">Playful</SelectItem>
-                  <SelectItem value="calm">Calm</SelectItem>
-                  <SelectItem value="direct">Direct</SelectItem>
-                  <SelectItem value="insightful">Insightful</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+                {anonymous && (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              <span>
+                <span className="font-matter block text-sm font-medium text-zinc-900">
+                  Anonymous
+                </span>
+                <span className="font-matter mt-0.5 block text-xs text-zinc-500">
+                  Hide respondent names. Skip the name question entirely.
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
 
         {/* Questions */}
-        <div className="space-y-4">
-          {questions.map((q, i) => (
-            <QuestionCard
-              key={q._id}
-              question={q}
-              index={i}
-              onChange={(updated) => updateQuestion(i, updated)}
-              onDelete={() => deleteQuestion(i)}
-            />
-          ))}
+        <div className="mt-10 mb-3 flex items-baseline justify-between">
+          <h2 className="font-display text-xl text-white md:text-2xl">Questions</h2>
+          <p className="font-matter text-xs text-white/55">
+            {questions.length} {questions.length === 1 ? "question" : "questions"}
+          </p>
         </div>
 
-        {/* Add question */}
-        <Button variant="outline" className="w-full" onClick={addQuestion}>
-          <Plus className="h-4 w-4 mr-2" />
+        <div className="space-y-3">
+          <AnimatePresence initial={false}>
+            {questions.map((q, i) => (
+              <QuestionRow
+                key={q._id}
+                question={q}
+                index={i}
+                canRemove={questions.length > 1}
+                error={qErrs[q._id]}
+                onChange={updateQuestion}
+                onRemove={() => removeQuestion(q._id)}
+              />
+            ))}
+          </AnimatePresence>
+          {qErrs._global && (
+            <p className="font-matter text-xs text-red-200">{qErrs._global}</p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={addQuestion}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-white/30 bg-white/[0.04] py-3.5 text-sm font-medium text-white/80 transition-colors hover:border-white/45 hover:bg-white/[0.07]"
+        >
+          <Plus className="h-4 w-4" />
           Add question
-        </Button>
+        </button>
 
-        {/* Error */}
-        {error && (
-          <p className="text-sm text-destructive font-medium">{error}</p>
-        )}
+        {/* Server error banner */}
+        <AnimatePresence>
+          {serverError && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="mt-6 rounded-2xl border border-red-200/30 bg-red-500/10 p-4 backdrop-blur"
+            >
+              <p className="font-matter text-sm font-medium text-white">
+                {serverError.message}
+              </p>
+              {serverError.kind === "sarvam" && (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="font-matter mt-3 rounded-full bg-white px-4 py-1.5 text-xs font-medium text-zinc-900 transition-colors hover:bg-white/90"
+                >
+                  Try again
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Publish */}
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex gap-2 items-center text-sm text-muted-foreground">
-            <Badge variant="secondary">{questions.length} question{questions.length !== 1 ? "s" : ""}</Badge>
-            <Badge variant="secondary">{tone}</Badge>
-          </div>
-          <Button onClick={handlePublish} disabled={publishing} size="lg">
-            {publishing ? "Publishing…" : "Publish"}
-          </Button>
+        {/* Submit */}
+        <div className="mt-10 flex justify-end">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="font-matter group relative isolate flex h-14 items-center justify-center overflow-hidden rounded-full bg-[#111820] px-10 text-base font-medium text-white shadow-[0_18px_45px_rgba(4,12,28,0.34)] transition-transform hover:scale-[1.02] hover:bg-[#0b1118] disabled:opacity-50"
+          >
+            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%)]" />
+            <span className="pointer-events-none absolute -left-12 top-0 h-full w-12 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-64" />
+            <span className="relative z-10">Generate form →</span>
+          </button>
         </div>
       </div>
+
+      {/* Loading takeover */}
+      <AnimatePresence>{submitting && <GeneratingOverlay />}</AnimatePresence>
     </div>
   );
 }
