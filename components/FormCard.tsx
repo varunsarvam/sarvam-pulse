@@ -5,7 +5,7 @@ import { Check, Copy } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useState } from "react";
-import type { Form, FormTone } from "@/lib/types";
+import type { Form } from "@/lib/types";
 
 interface FormCardProps {
   form: Form;
@@ -14,12 +14,16 @@ interface FormCardProps {
   index: number;
 }
 
-const TONE_BG: Record<FormTone, string> = {
-  playful:   "#E8451A",
-  calm:      "#2233CC",
-  direct:    "#1A6B58",
-  insightful:"#5B2A8E",
-};
+// Round-robin — index in the list determines color, never two the same on one page
+const CARD_COLORS = [
+  "#E8451A", // orange-red
+  "#2233CC", // royal blue
+  "#1A6B58", // teal
+  "#7C3AED", // violet
+  "#B45309", // amber-brown
+  "#0F766E", // emerald
+  "#BE185D", // rose
+];
 
 async function copyText(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
@@ -58,7 +62,7 @@ export function FormCard({
     }
   }
 
-  const bg = TONE_BG[form.tone];
+  const bg = CARD_COLORS[index % CARD_COLORS.length];
 
   return (
     <motion.article
