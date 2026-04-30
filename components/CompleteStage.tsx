@@ -18,12 +18,39 @@ interface Identity {
 const CARD_W = 300;
 const CARD_H = 380;
 
-const SHADER_COLORS = ["#d92638", "#3f89c6", "#f59d38"] as const;
-const SHADER_BACK = "#2e1f27";
+// ─── Color palettes (round-robin per session) ─────────────────────────────────
+
+export interface CardPalette {
+  colorBack: string;
+  colors: [string, string, string];
+}
+
+const PALETTES: CardPalette[] = [
+  { colorBack: "#2e1f27", colors: ["#d92638", "#3f89c6", "#f59d38"] }, // original
+  { colorBack: "#0a1a2e", colors: ["#0ea5e9", "#22d3ee", "#38bdf8"] }, // ocean
+  { colorBack: "#0a1f12", colors: ["#16a34a", "#84cc16", "#ca8a04"] }, // forest
+  { colorBack: "#150d2a", colors: ["#8b5cf6", "#ec4899", "#a78bfa"] }, // aurora
+  { colorBack: "#1c0a06", colors: ["#ef4444", "#f97316", "#fbbf24"] }, // fire
+  { colorBack: "#070f1e", colors: ["#06b6d4", "#3b82f6", "#818cf8"] }, // midnight
+  { colorBack: "#1f0a14", colors: ["#f43f5e", "#fb7185", "#fda4af"] }, // rose
+];
+
+/**
+ * Picks a palette deterministically from a session ID so the same respondent
+ * always sees the same card, but each new session cycles through all 7 colors.
+ */
+export function getCardPalette(sessionId: string | null): CardPalette {
+  if (!sessionId) return PALETTES[0];
+  const hash = sessionId
+    .replace(/-/g, "")
+    .split("")
+    .reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return PALETTES[hash % PALETTES.length];
+}
 
 // ─── Loading shimmer ──────────────────────────────────────────────────────────
 
-function LoadingShimmer() {
+function LoadingShimmer({ palette }: { palette: CardPalette }) {
   return (
     <div className="flex flex-col items-center gap-5">
       <div
@@ -35,8 +62,8 @@ function LoadingShimmer() {
           height={CARD_H}
           scale={0.45}
           offsetY={-0.16}
-          colors={[...SHADER_COLORS]}
-          colorBack={SHADER_BACK}
+          colors={palette.colors}
+          colorBack={palette.colorBack}
           radius={1}
           focalDistance={0}
           focalAngle={0}
@@ -77,6 +104,8 @@ export function CompleteStage({
   form: Form;
   sessionId: string | null;
 }) {
+  const palette = getCardPalette(sessionId);
+
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [retryAttempts, setRetryAttempts] = useState(0);
@@ -300,7 +329,7 @@ export function CompleteStage({
   if (!identity) {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <LoadingShimmer />
+        <LoadingShimmer palette={palette} />
       </div>
     );
   }
@@ -333,8 +362,8 @@ export function CompleteStage({
               height={CARD_H}
               scale={0.45}
               offsetY={-0.16}
-              colors={[...SHADER_COLORS]}
-              colorBack={SHADER_BACK}
+              colors={palette.colors}
+              colorBack={palette.colorBack}
               radius={1}
               focalDistance={focalDistance}
               focalAngle={focalAngle}

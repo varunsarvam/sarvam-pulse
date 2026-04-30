@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
-import { AIPresence, type AvatarMode } from "@/components/AIPresence";
+import type { AvatarMode } from "@/components/AIPresence";
 import { BackgroundMusic } from "@/components/BackgroundMusic";
 import { PresenceShader, type PresenceShaderMode } from "@/components/PresenceShader";
 import { TTSPlayer } from "@/components/TTSPlayer";
@@ -19,7 +19,7 @@ import { Ranking } from "@/components/inputs/Ranking";
 import { ThisOrThat } from "@/components/inputs/ThisOrThat";
 import { VisualSelect } from "@/components/inputs/VisualSelect";
 import { Reflection } from "@/components/Reflection";
-import { CompleteStage } from "@/components/CompleteStage";
+import { CompleteStage, getCardPalette } from "@/components/CompleteStage";
 import { playTick, playWhoosh, setSoundMuted } from "@/lib/sounds";
 import type { Form, Question } from "@/lib/types";
 import type { NullReflectionReason, ReflectionResult } from "@/lib/reflection";
@@ -62,19 +62,6 @@ const fadeUp: Variants = {
   exit: { opacity: 0, y: -16, transition: { duration: 0.3, ease: "easeIn" as const } },
 };
 
-// ─── Tone-tinted left column gradient ────────────────────────────────────────
-
-const TONE_BG: Record<string, string> = {
-  playful:
-    "radial-gradient(ellipse at 50% 52%, rgba(249,115,22,0.13) 0%, transparent 68%), #0a0a0a",
-  calm:
-    "radial-gradient(ellipse at 50% 52%, rgba(59,130,246,0.13) 0%, transparent 68%), #0a0a0a",
-  direct:
-    "radial-gradient(ellipse at 50% 52%, rgba(156,163,175,0.13) 0%, transparent 68%), #0a0a0a",
-  insightful:
-    "radial-gradient(ellipse at 50% 52%, rgba(139,92,246,0.13) 0%, transparent 68%), #0a0a0a",
-};
-
 // ─── Tone gradient config ────────────────────────────────────────────────────
 
 const ENTRY_GRADIENT: Record<string, { from: string; to: string }> = {
@@ -87,18 +74,21 @@ const ENTRY_GRADIENT: Record<string, { from: string; to: string }> = {
 // ─── Reaction pop sub-component ──────────────────────────────────────────────
 
 function ReactionPopEmoji({ emoji }: { emoji: string }) {
-  const pos = useRef({
+  // Position the pop once per mount. Using a state initializer (not a useRef
+  // initialized with Math.random()) keeps the random call out of render and
+  // satisfies the React-hooks lint rules.
+  const [pos] = useState(() => ({
     left: `${15 + Math.random() * 70}%`,
     top: `${15 + Math.random() * 60}%`,
     drift: (Math.random() - 0.5) * 50,
-  });
+  }));
 
   return (
     <motion.span
       className="absolute text-3xl pointer-events-none select-none z-20"
-      style={{ left: pos.current.left, top: pos.current.top }}
+      style={{ left: pos.left, top: pos.top }}
       initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: [0, 1.4, 0], opacity: [0, 1, 0], x: pos.current.drift }}
+      animate={{ scale: [0, 1.4, 0], opacity: [0, 1, 0], x: pos.drift }}
       transition={{ duration: 1.2, ease: "easeOut" }}
     >
       {emoji}
@@ -1063,7 +1053,6 @@ export function RespondentFlow({
     setSoundMuted(muted);
   }, [muted]);
 
-  const leftBg = TONE_BG[form.tone] ?? TONE_BG.playful;
   const hasStarted = stage !== "ENTRY";
   let shaderMode: PresenceShaderMode = "static";
   if (hasStarted) {
@@ -1494,10 +1483,18 @@ export function RespondentFlow({
     <div className="relative h-screen overflow-hidden">
       <div className="fixed inset-0 z-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
       <PresenceShader mode={shaderMode} className="fixed inset-0 z-0" />
-      {/* Cover the blue shader on the complete screen */}
-      {stage === "COMPLETE" && (
-        <div className="fixed inset-0 z-[1]" style={{ background: "#2e1f27" }} />
-      )}
+      {/* Cover the blue shader on the complete screen — color from round-robin palette */}
+      {stage === "COMPLETE" && (() => {
+        const palette = getCardPalette(sessionId);
+        return (
+          <div
+            className="fixed inset-0 z-[1]"
+            style={{
+              background: `radial-gradient(ellipse 70% 55% at 50% 38%, ${palette.colors[0]}28, transparent 65%), ${palette.colorBack}`,
+            }}
+          />
+        );
+      })()}
       {/* ── Mute toggle — fixed overlay, always accessible ── */}
       <button
         onClick={toggleMute}
@@ -1535,29 +1532,12 @@ export function RespondentFlow({
         </div>
       )}
 
-      {/* ── Left: AI presence (40% desktop, top banner mobile) ── */}
-      <div
-        className="hidden"
-        style={{ background: leftBg }}
-      >
-        {/* Slow-breathing tint overlay */}
-        <motion.div
-          className="absolute inset-0 pointer-events-none"
-          animate={{ opacity: [0.4, 0.75, 0.4] }}
-          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-          style={{ background: leftBg }}
-        />
-        <div className="relative flex-1 flex items-center justify-center w-full md:scale-100 scale-[0.45]">
-          {stage === "QUESTION" ? (
-            <>
-              {/* TODO: replace with paper shader avatar synced to TTS */}
-              {/* <AIPresence tone={form.tone} mode={avatarMode} speaking={isSpeaking} /> */}
-            </>
-          ) : (
-            <AIPresence tone={form.tone} mode={avatarMode} speaking={isSpeaking} />
-          )}
-        </div>
-      </div>
+      {/* ── Left panel placeholder: kept hidden in the current design ──
+          Previously rendered an AIPresence avatar + a slow-breathing motion
+          tint. The whole panel is `display: none` so framer-motion was
+          calculating keyframes for nothing. The block is left here (with no
+          children) as a marker for the eventual paper-shader avatar. */}
+      <div className="hidden" />
 
       {/* ── Right: human expression (60% desktop, rest mobile) ── */}
       <div
