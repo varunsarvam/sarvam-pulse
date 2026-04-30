@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Check, Copy } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -70,6 +69,7 @@ export function FormCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.08, ease: "easeOut" }}
       whileHover={{ scale: 1.015, y: -2 }}
+      onClick={() => window.location.href = `/respond/${form.id}`}
       className="relative flex aspect-[3/4] cursor-pointer flex-col overflow-hidden rounded-xl p-3 shadow-lg"
       style={{ background: bg }}
     >
@@ -122,37 +122,23 @@ export function FormCard({
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-1.5">
-        <Link
-          href={`/respond/${form.id}`}
-          className="flex flex-1 items-center justify-center rounded-lg py-1.5 text-[10px] font-semibold text-white transition-all hover:brightness-110"
-          style={{
-            background: "rgba(0,0,0,0.22)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255,255,255,0.14)",
-          }}
-        >
-          Open →
-        </Link>
-        <button
-          type="button"
-          onClick={handleCopy}
-          aria-label="Copy link"
-          className="flex h-[26px] w-[26px] items-center justify-center rounded-lg transition-all hover:brightness-110"
-          style={{
-            background: "rgba(0,0,0,0.22)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255,255,255,0.14)",
-          }}
-        >
-          {copied ? (
-            <Check className="h-2 w-2 text-white" />
-          ) : (
-            <Copy className="h-2 w-2 text-white" />
-          )}
-        </button>
-      </div>
+      {/* Copy button */}
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-[10px] font-semibold text-white transition-all hover:brightness-110"
+        style={{
+          background: "rgba(0,0,0,0.22)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.14)",
+        }}
+      >
+        {copied ? (
+          <><Check className="h-2.5 w-2.5" /> Copied!</>
+        ) : (
+          <><Copy className="h-2.5 w-2.5" /> Copy link</>
+        )}
+      </button>
     </motion.article>
   );
 }
