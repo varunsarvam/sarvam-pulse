@@ -119,7 +119,7 @@ export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSlide
   }
 
   return (
-    <div className="flex w-full flex-col gap-5 py-2">
+    <div className="flex w-full flex-col gap-8 py-2">
 
       {/* ── 3×2 grid ── */}
       <div className="grid grid-cols-3 gap-x-0 gap-y-6">
