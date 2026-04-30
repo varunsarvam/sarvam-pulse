@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
-import { motion, useMotionValue, animate, AnimatePresence } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Lottie from "lottie-react";
 import type { Question } from "@/lib/types";
 
@@ -117,46 +117,15 @@ function EmojiMarker({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSliderProps) {
-  const trackRef = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState(50);
-  const [dragging, setDragging] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const x = useMotionValue(0);
 
   void question;
 
   const step = getStep(value);
   const thumbColor = gradientColor(value);
 
-  const xToValue = useCallback((px: number): number => {
-    const track = trackRef.current;
-    if (!track) return 50;
-    return Math.round(Math.max(0, Math.min(100, (px / track.getBoundingClientRect().width) * 100)));
-  }, []);
-
-  const initThumb = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return;
-    requestAnimationFrame(() => {
-      const w = trackRef.current?.getBoundingClientRect().width ?? 0;
-      x.set(w * 0.5);
-    });
-  }, [x]);
-
-  function handleTrackClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (disabled || submitted) return;
-    const track = trackRef.current;
-    if (!track) return;
-    const rect = track.getBoundingClientRect();
-    const px = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-    animate(x, px, { type: "spring", stiffness: 320, damping: 24 });
-    setValue(xToValue(px));
-  }
-
   function jumpTo(at: number) {
-    const track = trackRef.current;
-    if (!track) return;
-    const w = track.getBoundingClientRect().width;
-    animate(x, (at / 100) * w, { type: "spring", stiffness: 320, damping: 24 });
     setValue(at);
   }
 
@@ -182,8 +151,8 @@ export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSlide
           className="absolute inset-0 rounded-full blur-2xl"
           animate={{
             backgroundColor: thumbColor,
-            opacity: dragging ? 0.35 : 0.15,
-            scale: dragging ? 1.4 : 1.1,
+            opacity: 0.15,
+            scale: 1.1,
           }}
           transition={{ duration: 0.3 }}
         />
@@ -214,59 +183,17 @@ export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSlide
         </motion.span>
       </AnimatePresence>
 
-      {/* ── Track + thumb ── */}
-      <div className="w-full px-3">
-        <div
-          ref={trackRef}
-          className="relative flex cursor-pointer items-center py-5"
-          onClick={handleTrackClick}
-        >
-          <div
-            className="h-2.5 w-full rounded-full"
-            style={{ background: "linear-gradient(to right, #ef4444, #eab308, #22c55e)" }}
+      {/* ── Emoji step markers ── */}
+      <div className="flex w-full justify-between px-3">
+        {STEPS.map((s) => (
+          <EmojiMarker
+            key={s.at}
+            step={s}
+            active={step.at === s.at}
+            disabled={disabled || submitted}
+            onClick={() => jumpTo(s.at)}
           />
-          <motion.div
-            ref={initThumb}
-            drag={disabled || submitted ? false : "x"}
-            dragConstraints={trackRef}
-            dragElastic={0}
-            dragMomentum={false}
-            style={{ x, position: "absolute", top: "50%", y: "-50%" }}
-            onDragStart={() => setDragging(true)}
-            onDrag={() => {
-              const w = trackRef.current?.getBoundingClientRect().width ?? 0;
-              const clamped = Math.max(0, Math.min(w, x.get()));
-              x.set(clamped);
-              setValue(xToValue(clamped));
-            }}
-            onDragEnd={() => setDragging(false)}
-            onClick={(e) => e.stopPropagation()}
-            whileTap={{ scale: 1.25 }}
-            animate={{ scale: dragging ? 1.2 : 1 }}
-            transition={{ type: "spring", stiffness: 400, damping: 24 }}
-            className="flex h-9 w-9 -translate-x-1/2 cursor-grab items-center justify-center rounded-full bg-white active:cursor-grabbing"
-            style={{ boxShadow: `0 2px 14px rgba(0,0,0,0.16), 0 0 0 3px ${thumbColor}` }}
-          >
-            <motion.span
-              className="h-2.5 w-2.5 rounded-full"
-              animate={{ backgroundColor: thumbColor }}
-              transition={{ duration: 0.15 }}
-            />
-          </motion.div>
-        </div>
-
-        {/* ── Emoji step markers ── */}
-        <div className="flex justify-between px-0.5 pt-1">
-          {STEPS.map((s) => (
-            <EmojiMarker
-              key={s.at}
-              step={s}
-              active={step.at === s.at}
-              disabled={disabled || submitted}
-              onClick={() => jumpTo(s.at)}
-            />
-          ))}
-        </div>
+        ))}
       </div>
 
       {/* ── Confirm ── */}
