@@ -1,11 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import { AIPresence, type AvatarMode } from "@/components/AIPresence";
 import { BackgroundMusic } from "@/components/BackgroundMusic";
+import { PresenceShader, type PresenceShaderMode } from "@/components/PresenceShader";
 import { TTSPlayer } from "@/components/TTSPlayer";
 import { useLiveData } from "@/hooks/useLiveData";
 import { Button } from "@/components/ui/button";
@@ -105,25 +107,6 @@ function ReactionPopEmoji({ emoji }: { emoji: string }) {
 
 // ─── Entry screen ─────────────────────────────────────────────────────────────
 
-interface FloatingQuote {
-  id: number;
-  text: string;
-  xOffset: number;
-  yBase: number;
-  fontScale: number;
-  duration: number;
-  yPath: [number, number, number, number];
-}
-
-function shuffleStrings(values: string[]): string[] {
-  const next = [...values];
-  for (let i = next.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [next[i], next[j]] = [next[j], next[i]];
-  }
-  return next;
-}
-
 function normalizeRespondentName(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -137,6 +120,22 @@ function validateRespondentName(value: string): string | null {
   }
   return null;
 }
+
+function truncateWords(value: string, maxWords: number): string {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return value;
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
+
+const ENTRY_QUOTE_LAYOUT = [
+  { top: "15.2%", size: "clamp(0.54rem, 1.08vw, 1.12rem)", opacity: 0.1 },
+  { top: "26%", size: "clamp(0.65rem, 1.3vw, 1.35rem)", opacity: 0.25 },
+  { top: "37.2%", size: "clamp(0.76rem, 1.52vw, 1.58rem)", opacity: 0.5 },
+  { top: "48.4%", size: "clamp(0.82rem, 1.62vw, 1.7rem)", opacity: 1 },
+  { top: "61.2%", size: "clamp(0.76rem, 1.52vw, 1.58rem)", opacity: 0.5 },
+  { top: "72.4%", size: "clamp(0.65rem, 1.3vw, 1.35rem)", opacity: 0.25 },
+  { top: "84%", size: "clamp(0.54rem, 1.08vw, 1.12rem)", opacity: 0.1 },
+];
 
 function EntryScreen({
   form,
@@ -153,167 +152,164 @@ function EntryScreen({
     questionIds
   );
   const [starting, setStarting] = useState(false);
-  const [visibleQuotes, setVisibleQuotes] = useState<FloatingQuote[]>([]);
-
-  const quotesPoolRef = useRef<string[]>([]);
-  const quoteCounterRef = useRef(0);
-  const recentlyShownRef = useRef<string[]>([]);
-  const quoteTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-  useEffect(() => {
-    quotesPoolRef.current = shuffleStrings(quotes);
-  }, [quotes]);
-
-  useEffect(() => {
-    const reshuffleInterval = setInterval(() => {
-      quotesPoolRef.current = shuffleStrings(quotesPoolRef.current);
-    }, 30_000);
-
-    function clearQuote(id: number, delay: number) {
-      const timeout = setTimeout(() => {
-        setVisibleQuotes((prev) => prev.filter((q) => q.id !== id));
-      }, delay);
-      quoteTimeoutsRef.current.push(timeout);
-    }
-
-    function mountQuote(delay = 0) {
-      const pool = quotesPoolRef.current;
-      if (pool.length === 0) return;
-      const recent = new Set(recentlyShownRef.current);
-      const candidates = pool.filter((q) => !recent.has(q));
-      const source = candidates.length > 0 ? candidates : pool;
-      const text = source[Math.floor(Math.random() * source.length)];
-      quoteCounterRef.current++;
-      const id = quoteCounterRef.current;
-
-      recentlyShownRef.current = [...recentlyShownRef.current.slice(-4), text];
-
-      setVisibleQuotes((prev) => {
-        const yBase = Math.floor(Math.random() * 96);
-        const tooClose = prev.some((q) => Math.abs(q.yBase - yBase) < 60);
-        if (tooClose && delay === 0) {
-          const timeout = setTimeout(() => mountQuote(800), 800);
-          quoteTimeoutsRef.current.push(timeout);
-          return prev;
-        }
-
-        const duration = 5 + Math.random() * 2;
-        const rise = 82 + Math.random() * 34;
-        const quote: FloatingQuote = {
-          id,
-          text,
-          xOffset: Math.floor(Math.random() * 201),
-          yBase,
-          fontScale: 0.85 + Math.random() * 0.2,
-          duration,
-          yPath: [70, 35, 0, -rise],
-        };
-        clearQuote(id, duration * 1000);
-        return [...prev.slice(-4), quote];
-      });
-    }
-
-    const interval = setInterval(() => {
-      mountQuote();
-    }, 2000);
-
-    return () => {
-      clearInterval(interval);
-      clearInterval(reshuffleInterval);
-      quoteTimeoutsRef.current.forEach(clearTimeout);
-      quoteTimeoutsRef.current = [];
-    };
-  }, []);
+  const [quoteCursor, setQuoteCursor] = useState(0);
 
   async function handleStart() {
     setStarting(true);
     await onStart().catch(() => setStarting(false));
   }
 
+  const quoteLines = quotes.slice(-7).map((quote) => truncateWords(quote, 4));
+  const quoteSource =
+    quoteLines.length > 0
+      ? quoteLines
+      : [
+          "Let's collaborate and create something amazing!",
+          "Live in harmony.",
+          "Embrace coexistence.",
+          "Together in unity.",
+          "Finding common ground.",
+          "Living side by side.",
+          "Building bridges, not walls.",
+        ];
+  const displayQuotes = ENTRY_QUOTE_LAYOUT.map((_, index) => {
+    const sourceIndex = quoteCursor + index;
+    return {
+      id: sourceIndex,
+      text: quoteSource[sourceIndex % quoteSource.length],
+    };
+  });
+
+  useEffect(() => {
+    if (quoteSource.length <= 1) return;
+    const interval = setInterval(() => {
+      setQuoteCursor((current) => current + 1);
+    }, 2200);
+
+    return () => clearInterval(interval);
+  }, [quoteSource.length]);
+
   return (
-    <div className="relative flex h-full w-full flex-col gap-6 p-5 md:flex-row md:p-8">
-      <div className="flex w-full items-center justify-center md:w-[45%]">
-        <div className="relative z-10 flex w-full max-w-xl flex-col gap-7 rounded-3xl bg-white p-8 text-black shadow-2xl md:p-12">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-500 ring-1 ring-emerald-500/20">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              {count > 0 ? `${count} people responded` : "Live"}
-            </span>
-            {reactionCount > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-500 ring-1 ring-amber-500/20">
-                {reactionCount} reactions
-              </span>
-            )}
-            <span className="text-xs text-muted-foreground">· ~3 min</span>
-          </div>
-
-          <div className="relative min-h-[150px] overflow-hidden">
-            <AnimatePresence>
-              {visibleQuotes.length > 0 ? (
-                visibleQuotes.map((vq) => (
-                  <motion.p
-                    key={vq.id}
-                    className="absolute text-sm text-muted-foreground/50 italic leading-relaxed"
-                    style={{
-                      left: `${vq.xOffset}px`,
-                      top: `${vq.yBase}px`,
-                      fontSize: `${vq.fontScale}em`,
-                    }}
-                    initial={{ opacity: 0, y: vq.yPath[0] }}
-                    animate={{ opacity: [0, 0.75, 0.75, 0], y: vq.yPath }}
-                    transition={{
-                      duration: vq.duration,
-                      times: [0, 0.1, 0.85, 1],
-                      ease: "easeInOut",
-                    }}
-                  >
-                    &ldquo;{vq.text}&rdquo;
-                  </motion.p>
-                ))
-              ) : (
-                <motion.p
-                  key="placeholder"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-sm text-muted-foreground/60 italic"
-                >
-                  Be among the first to respond.
-                </motion.p>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <motion.div
-            className="w-fit"
-            animate={{ scale: [1, 1.04, 1] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-          >
-            <Button
-              size="lg"
-              className="text-base px-8"
-              onClick={handleStart}
-              disabled={starting}
+    <div className="relative flex h-full w-full -translate-y-6 flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8">
+      <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
+        <div className="flex flex-col items-start gap-7">
+          <h1 className="font-display max-w-2xl text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]">
+            {form.title}
+          </h1>
+          <div className="flex flex-col items-start gap-4">
+            <motion.div
+              className="w-fit"
+              animate={{ scale: [1, 1.04, 1] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
             >
-              {starting ? "Starting…" : "Let's start →"}
-            </Button>
-          </motion.div>
-
-          <p className="text-xs text-muted-foreground">
-            {questions.length} question{questions.length !== 1 ? "s" : ""}
-          </p>
+              <Button
+                variant="ghost"
+                size="lg"
+                className="group relative isolate h-14 overflow-hidden rounded-[999px] border-0 bg-transparent px-10 text-lg text-white shadow-[0_18px_45px_rgba(4,12,28,0.34),inset_0_1px_0_rgba(255,255,255,0.36)] backdrop-blur-[24px] backdrop-saturate-150 hover:bg-transparent hover:text-white"
+                onClick={handleStart}
+                disabled={starting}
+              >
+                <span className="pointer-events-none absolute inset-0 rounded-[999px] bg-[linear-gradient(135deg,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.16)_34%,rgba(255,255,255,0.06)_58%,rgba(255,255,255,0.26)_100%)]" />
+                <span className="pointer-events-none absolute inset-[1px] rounded-[999px] bg-[radial-gradient(circle_at_22%_12%,rgba(255,255,255,0.62),transparent_28%),radial-gradient(circle_at_85%_85%,rgba(125,191,255,0.22),transparent_34%)]" />
+                <span className="pointer-events-none absolute -left-8 top-0 h-full w-20 -skew-x-12 bg-white/30 blur-xl transition-transform duration-700 group-hover:translate-x-64" />
+                <span className="relative z-10 drop-shadow-[0_1px_8px_rgba(255,255,255,0.18)]">
+                  {starting ? "Starting…" : "Let's start →"}
+                </span>
+              </Button>
+            </motion.div>
+          </div>
         </div>
       </div>
 
-      <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
-        <div>
-          <h1 className="font-display max-w-2xl text-5xl leading-tight tracking-tight text-white md:text-6xl">
-            {form.title}
-          </h1>
-          {form.intent && (
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-white/75">
-              {form.intent}
-            </p>
-          )}
+      <div className="flex w-full items-center justify-center md:w-[45%]">
+        <div className="relative z-10 aspect-[400/250] w-full max-w-[560px] overflow-hidden rounded-[32px] bg-white text-black shadow-2xl">
+          <AnimatePresence initial={false}>
+            {displayQuotes.map((quote, index) => (
+              <motion.p
+                key={quote.id}
+                className="font-matter absolute left-[6.75%] z-10 max-w-[58%] truncate whitespace-nowrap leading-none text-black"
+                initial={{
+                  top: "96%",
+                  opacity: 0,
+                  fontSize: ENTRY_QUOTE_LAYOUT[index].size,
+                }}
+                animate={{
+                  top: ENTRY_QUOTE_LAYOUT[index].top,
+                  opacity: ENTRY_QUOTE_LAYOUT[index].opacity,
+                  fontSize: ENTRY_QUOTE_LAYOUT[index].size,
+                }}
+                exit={{
+                  top: "4%",
+                  opacity: 0,
+                  transition: { duration: 0.45, ease: "easeIn" },
+                }}
+                transition={{ duration: 0.75, ease: "easeInOut" }}
+              >
+                &ldquo;{quote.text}&rdquo;
+              </motion.p>
+            ))}
+          </AnimatePresence>
+
+          <motion.div
+            className="absolute left-[72.5%] top-[57.8%] z-20 h-[54.67%] w-[34.17%] cursor-pointer"
+            whileHover={{ scale: 1.06, y: -4 }}
+            transition={{ type: "spring", stiffness: 260, damping: 18 }}
+          >
+            <Image
+              src="/pink-asset.png"
+              alt=""
+              fill
+              sizes="300px"
+              className="rotate-[10deg] object-contain"
+              draggable={false}
+            />
+            <div className="absolute left-[24%] top-[34%] z-10 flex w-[52%] rotate-[10deg] flex-col items-center text-center text-white">
+              <p className="font-display text-[clamp(1.08rem,2.7vw,3.4rem)] leading-none">
+                {count}
+              </p>
+              <p className="text-[clamp(0.4rem,1vw,1.25rem)] leading-none">Responded</p>
+            </div>
+          </motion.div>
+
+          <motion.div
+            className="absolute left-[60.5%] top-[69.6%] z-30 h-[37.74%] w-[23.38%] cursor-pointer"
+            whileHover={{ scale: 1.08, y: -5 }}
+            transition={{ type: "spring", stiffness: 260, damping: 18 }}
+          >
+            <Image
+              src="/green-asset.png"
+              alt=""
+              fill
+              sizes="224px"
+              className="object-contain"
+              draggable={false}
+            />
+            <div className="absolute left-[22%] top-[26%] flex h-[48%] w-[56%] flex-col items-center justify-center text-center text-white">
+              <p className="font-display text-[clamp(1.08rem,2.7vw,3.4rem)] leading-none">
+                {reactionCount}
+              </p>
+              <p className="text-[clamp(0.4rem,1vw,1.25rem)] leading-none">Reactions</p>
+            </div>
+          </motion.div>
+
+          <motion.div
+            className="absolute left-[86%] top-[40%] z-10 h-[31%] w-[19%] cursor-pointer"
+            whileHover={{ scale: 1.08, y: -4 }}
+            transition={{ type: "spring", stiffness: 260, damping: 18 }}
+          >
+            <Image
+              src="/blue-asset.png"
+              alt=""
+              fill
+              sizes="152px"
+              className="rotate-90 object-contain"
+              draggable={false}
+            />
+            <div className="absolute left-[35%] top-[32%] flex w-[34%] flex-col items-center text-center text-white">
+              <p className="font-display text-[clamp(0.93rem,2.33vw,2.9rem)] leading-none">3</p>
+              <p className="text-[clamp(0.31rem,0.78vw,0.95rem)] leading-none">Mins</p>
+            </div>
+          </motion.div>
         </div>
       </div>
 
@@ -347,18 +343,16 @@ function ThinkingDots() {
   );
 }
 
-function SetupScreen({
-  progress,
+function NameCard({
   canContinue,
-  hasError,
+  isLoading,
   name,
   nameError,
   onNameChange,
   onContinue,
 }: {
-  progress: number;
   canContinue: boolean;
-  hasError: boolean;
+  isLoading: boolean;
   name: string;
   nameError: string | null;
   onNameChange: (value: string) => void;
@@ -377,114 +371,146 @@ function SetupScreen({
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col gap-6 p-5 md:flex-row md:p-8">
-      <div className="flex w-full items-center justify-center md:w-[45%]">
-        <div className="relative z-10 flex w-full max-w-xl flex-col gap-7 rounded-3xl bg-white p-8 text-black shadow-2xl md:p-12">
+    <div className="relative z-10 flex min-h-[360px] w-full max-w-2xl flex-col justify-center gap-7 rounded-3xl bg-white p-9 text-black shadow-2xl md:p-14">
+      <AnimatePresence mode="wait">
+        {isLoading ? (
           <motion.div
-            className="grid grid-cols-3 gap-2 max-w-md"
+            key="setup-loading"
+            className="flex flex-col items-center justify-center gap-5 py-8"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.45 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
           >
-            {["Speak freely", "See the room", "Leave with a signal"].map((text) => (
-              <div
-                key={text}
-                className="rounded-2xl border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-3 text-center text-[11px] leading-tight text-muted-foreground/80"
-              >
-                {text}
-              </div>
-            ))}
-          </motion.div>
-
-          <motion.div
-            className="w-full max-w-sm"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.18, duration: 0.5, ease: "easeOut" }}
-          >
-            <input
-              ref={inputRef}
-              value={name}
-              onChange={(e) => onNameChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="What should we call you?"
-              className="w-full rounded-2xl border border-foreground/[0.08] bg-background/70 px-5 py-4 text-lg text-foreground placeholder:text-muted-foreground/45 shadow-[0_12px_40px_rgba(0,0,0,0.10)] outline-none backdrop-blur transition-colors focus:border-foreground/30"
-              maxLength={30}
-            />
-            {nameError && (
-              <p className="mt-2 text-xs text-muted-foreground/70">
-                {nameError}
-              </p>
-            )}
-          </motion.div>
-
-          <motion.div
-            className="space-y-3 max-w-md"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.26, duration: 0.45 }}
-          >
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.08]">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-violet-300 via-foreground/80 to-blue-300"
-                initial={{ width: 0 }}
-                animate={{ width: `${Math.round(progress * 100)}%` }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground/70">
-              {hasError
-                ? "A few things are still tuning themselves. You can begin; Pulse will catch up gracefully."
-                : "Preparing the voice, pacing the questions, opening the signal."}
+            <motion.div
+              className="relative h-20 w-20 rounded-full bg-gradient-to-r from-violet-300 via-foreground/80 to-blue-300 p-1"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.15, repeat: Infinity, ease: "linear" }}
+            >
+              <div className="h-full w-full rounded-full bg-white" />
+              <div className="absolute inset-3 rounded-full bg-gradient-to-br from-violet-200/40 to-blue-200/40 blur-md" />
+            </motion.div>
+            <p className="text-center text-sm text-muted-foreground/70">
+              Opening the first question...
             </p>
           </motion.div>
-
+        ) : (
           <motion.div
-            className="w-fit"
-            animate={canContinue ? { scale: [1, 1.04, 1] } : { scale: 1 }}
-            transition={{ duration: 2.2, repeat: canContinue ? Infinity : 0, ease: "easeInOut" }}
+            key="setup-form"
+            className="flex flex-col gap-7"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
           >
-            <Button
-              size="lg"
-              className="text-base px-8"
-              onClick={onContinue}
-              disabled={!canContinue}
+            <motion.div
+              className="relative w-full max-w-lg"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08, duration: 0.5, ease: "easeOut" }}
             >
-              Begin the conversation →
-            </Button>
+              <input
+                ref={inputRef}
+                type="text"
+                value={name}
+                onChange={(e) => onNameChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                aria-label="Your Name"
+                className="font-matter w-full border-0 bg-transparent px-0 py-4 text-center text-[2.4rem] font-medium leading-tight text-transparent caret-transparent outline-none md:text-[3.25rem]"
+                maxLength={30}
+              />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-0 py-4">
+                <span
+                  className={`font-matter text-[2.4rem] font-medium leading-tight md:text-[3.25rem] ${
+                    name ? "text-foreground" : "text-foreground/25"
+                  }`}
+                >
+                  {name || "Your Name"}
+                </span>
+                <motion.span
+                  className="ml-2 h-[2.4rem] w-[5px] rounded-full bg-[#ff4d00] md:h-[3.25rem] md:w-[6px]"
+                  animate={{ opacity: [0, 1, 1, 0] }}
+                  transition={{ duration: 1.05, repeat: Infinity, times: [0, 0.2, 0.72, 1] }}
+                />
+              </div>
+              {nameError && (
+                <p className="mt-2 text-xs text-muted-foreground/70">
+                  {nameError}
+                </p>
+              )}
+            </motion.div>
+
+            <div className="flex min-h-16 justify-center">
+              <AnimatePresence>
+                {name.trim().length > 0 && (
+                <motion.div
+                  className="mx-auto w-fit"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                >
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    className="group relative isolate h-16 overflow-hidden rounded-[999px] bg-[#111820] px-12 text-xl font-medium text-white shadow-none transition-transform hover:scale-[1.03] hover:bg-[#0b1118] hover:text-white disabled:opacity-45"
+                    onClick={onContinue}
+                    disabled={!canContinue}
+                  >
+                    <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_45%)]" />
+                    <span className="pointer-events-none absolute -left-20 top-0 h-full w-20 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-96" />
+                    <span className="relative z-10">Begin the conversation →</span>
+                  </Button>
+                </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
-        </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function SetupScreen({
+  canContinue,
+  isLoading,
+  name,
+  nameError,
+  onNameChange,
+  onContinue,
+}: {
+  canContinue: boolean;
+  isLoading: boolean;
+  name: string;
+  nameError: string | null;
+  onNameChange: (value: string) => void;
+  onContinue: () => void;
+}) {
+  return (
+    <div className="relative flex h-full w-full -translate-y-6 flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8">
+      <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
+        <motion.h1
+          className="font-display max-w-2xl text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        >
+          The room is getting ready for you to get started.
+        </motion.h1>
       </div>
 
-      <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
-        <div className="space-y-4">
-          <motion.p
-            className="text-xs font-medium tracking-[0.24em] uppercase text-white/70"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-          >
-            The room is getting ready
-          </motion.p>
-          <motion.h1
-            className="font-display max-w-2xl text-5xl leading-tight tracking-tight text-white md:text-6xl"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08, duration: 0.5, ease: "easeOut" }}
-          >
-            A voice will meet you here.
-          </motion.h1>
-          <motion.p
-            className="max-w-xl text-base leading-relaxed text-white/75"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.16, duration: 0.5, ease: "easeOut" }}
-          >
-            Answer naturally. Pulse will listen, ask back, and reveal the
-            invisible patterns forming around your responses.
-          </motion.p>
-        </div>
+      <div className="flex w-full items-center justify-center md:w-[45%]">
+        <NameCard
+          canContinue={canContinue}
+          isLoading={isLoading}
+          name={name}
+          nameError={nameError}
+          onNameChange={onNameChange}
+          onContinue={onContinue}
+        />
       </div>
+
     </div>
   );
 }
@@ -860,7 +886,7 @@ function QuestionStage({
           transition={{ duration: 0.3, ease: "easeOut" as const }}
           className={
             splitLayout
-              ? "font-display text-4xl leading-tight tracking-tight text-white md:text-5xl"
+              ? "font-display text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
               : "text-2xl font-medium leading-snug"
           }
         >
@@ -872,14 +898,14 @@ function QuestionStage({
 
   if (splitLayout) {
     return (
-      <div className="flex min-h-screen w-full flex-col gap-6 bg-[url('/bg-blue.png')] bg-cover bg-center bg-no-repeat p-5 md:flex-row md:p-8">
+      <div className="flex min-h-screen w-full -translate-y-6 flex-col gap-6 p-4 md:-translate-y-8 md:flex-row md:p-4">
+        <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
+          <div className="max-w-2xl text-left">{promptArea}</div>
+        </div>
         <div className="flex w-full items-center justify-center md:w-[45%]">
-          <div className="w-full max-w-xl rounded-3xl bg-white p-8 text-black shadow-2xl md:p-12">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-4 text-black shadow-2xl">
             {inputArea}
           </div>
-        </div>
-        <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
-          <div className="max-w-2xl text-left">{promptArea}</div>
         </div>
       </div>
     );
@@ -1057,6 +1083,7 @@ export function RespondentFlow({
   const [preloadProgress, setPreloadProgress] = useState(0);
   const [setupMinElapsed, setSetupMinElapsed] = useState(false);
   const [preloadError, setPreloadError] = useState(false);
+  const [setupSubmitted, setSetupSubmitted] = useState(false);
 
   // ── Preload cache ──
   const preloadCacheRef = useRef<Map<string, PreloadItem>>(new Map());
@@ -1080,6 +1107,15 @@ export function RespondentFlow({
   const leftBg = TONE_BG[form.tone] ?? TONE_BG.playful;
   const respondentNameError = respondentName ? validateRespondentName(respondentName) : "Tell us what to call you.";
   const respondentNameValid = respondentNameError === null;
+  const hasStarted = stage !== "ENTRY" && stage !== "SETUP";
+  let shaderMode: PresenceShaderMode = "static";
+  if (hasStarted) {
+    if (stage === "QUESTION" || stage === "FOLLOWUP") {
+      shaderMode = ttsDone ? "listening" : "speaking";
+    } else {
+      shaderMode = "listening";
+    }
+  }
 
   function handlePhrasedReady(text: string, audioUrl?: string | null) {
     setPhrasedForTTS(text);
@@ -1169,6 +1205,7 @@ export function RespondentFlow({
     if (stage !== "SETUP") return;
 
     setSetupMinElapsed(false);
+    setSetupSubmitted(false);
     const minTimer = setTimeout(() => setSetupMinElapsed(true), 3000);
 
     return () => {
@@ -1177,23 +1214,28 @@ export function RespondentFlow({
   }, [stage]);
 
   useEffect(() => {
-    if (stage !== "SETUP" || preloadProgress < 1 || !respondentNameValid) return;
-    const autoTimer = setTimeout(() => {
-      void handleSetupContinue();
-    }, 8000);
-    return () => clearTimeout(autoTimer);
+    if (stage !== "SETUP" || !sessionId) return;
+    void preloadAll(sessionId, null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, preloadProgress, respondentNameValid]);
+  }, [stage, sessionId]);
 
   useEffect(() => {
-    if (stage !== "SETUP" || !sessionId || !respondentNameValid) return;
-    void preloadAll(sessionId, normalizeRespondentName(respondentName));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, sessionId, respondentNameValid, respondentName]);
+    if (
+      stage !== "SETUP" ||
+      !setupSubmitted ||
+      !setupMinElapsed ||
+      (preloadProgress < 1 && !preloadError)
+    ) {
+      return;
+    }
+    setAvatarMode("thinking");
+    setStage("QUESTION");
+  }, [stage, setupSubmitted, setupMinElapsed, preloadProgress, preloadError]);
 
   async function handleSetupContinue() {
     if (!sessionId || !respondentNameValid) return;
     const name = normalizeRespondentName(respondentName);
+    setSetupSubmitted(true);
     try {
       const res = await fetch("/api/sessions", {
         method: "PATCH",
@@ -1212,8 +1254,6 @@ export function RespondentFlow({
     } catch {
       setRespondentNameSaved(name);
     }
-    setAvatarMode("thinking");
-    setStage("QUESTION");
   }
 
   // Preload next question phrasing during reflection
@@ -1463,7 +1503,9 @@ export function RespondentFlow({
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-[url('/bg-blue.png')] bg-cover bg-center bg-no-repeat">
+    <div className="relative h-screen overflow-hidden">
+      <div className="fixed inset-0 z-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
+      <PresenceShader mode={shaderMode} className="fixed inset-0 z-0" />
       {/* ── Mute toggle — fixed overlay, always accessible ── */}
       <button
         onClick={toggleMute}
@@ -1529,8 +1571,8 @@ export function RespondentFlow({
       <div
         className={
           stage === "QUESTION"
-            ? "relative flex h-full w-full flex-1 items-stretch justify-stretch overflow-hidden"
-            : "relative flex h-full w-full flex-1 items-center justify-center overflow-hidden"
+            ? "relative z-10 flex h-full w-full flex-1 items-stretch justify-stretch overflow-hidden"
+            : "relative z-10 flex h-full w-full flex-1 items-center justify-center overflow-hidden"
         }
       >
         <AnimatePresence mode="wait">
@@ -1547,13 +1589,8 @@ export function RespondentFlow({
           {stage === "SETUP" && (
             <motion.div key="setup" {...fadeUp} className="w-full h-full">
               <SetupScreen
-                progress={preloadProgress}
-                canContinue={
-                  respondentNameValid &&
-                  setupMinElapsed &&
-                  (preloadProgress >= 0.6 || preloadError)
-                }
-                hasError={preloadError}
+                canContinue={respondentNameValid && !setupSubmitted}
+                isLoading={setupSubmitted}
                 name={respondentName}
                 nameError={respondentName ? respondentNameError : null}
                 onNameChange={setRespondentName}
@@ -1629,24 +1666,17 @@ export function RespondentFlow({
 
           {stage === "COMPLETE" && (
             <motion.div key="complete" {...fadeUp} className="w-full h-full">
-              <div className="flex h-full w-full flex-col gap-6 p-5 md:flex-row md:p-8">
-                <div className="flex w-full items-center justify-center md:w-[45%]">
-                  <div className="h-full w-full max-w-xl overflow-hidden rounded-3xl bg-white text-black shadow-2xl">
-                    <CompleteStage form={form} sessionId={sessionId} />
-                  </div>
-                </div>
-                <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
+              <div className="flex h-full w-full -translate-y-6 flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8">
+                <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/70">
-                      Complete
-                    </p>
-                    <h1 className="font-display mt-4 max-w-2xl text-5xl leading-tight tracking-tight text-white md:text-6xl">
+                    <h1 className="font-display mt-4 max-w-2xl text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]">
                       Your Pulse is ready.
                     </h1>
-                    <p className="mt-5 max-w-xl text-base leading-relaxed text-white/75">
-                      A final signal from everything you shared, shaped into a
-                      card you can keep or pass along.
-                    </p>
+                  </div>
+                </div>
+                <div className="flex w-full items-center justify-center md:w-[45%]">
+                  <div className="h-full w-full max-w-2xl overflow-hidden rounded-3xl bg-white text-black shadow-2xl">
+                    <CompleteStage form={form} sessionId={sessionId} />
                   </div>
                 </div>
               </div>

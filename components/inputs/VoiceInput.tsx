@@ -18,61 +18,178 @@ interface VoiceInputProps {
   disabled?: boolean;
 }
 
-const MAX_DURATION_MS = 30_000;
-const BAR_COUNT = 28;
+const MAX_DURATION_MS = 10 * 60_000;
 const TYPEWRITER_MS = 30;
 
-// ─── ListeningBlock ───────────────────────────────────────────────────────────
-// Shown while recording. Canvas waveform + animated dots respond to amplitude.
-// getAmplitude is passed as a ref-backed stable function from useAudioCapture.
+// ─── Recording shader ─────────────────────────────────────────────────────────
+// Shown while recording. This is a Shadertoy-style fragment shader translated
+// into a local WebGL canvas and driven by the mic amplitude.
 
-function ListeningBlock({
+const WAVE_VERTEX_SHADER = `
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+`;
+
+const WAVE_FRAGMENT_SHADER = `
+precision mediump float;
+
+uniform vec2 u_resolution;
+uniform float u_time;
+uniform float u_amp;
+
+void main() {
+  vec2 p = gl_FragCoord.xy / u_resolution.xy;
+  float t = u_time * 0.001;
+  float amp = 0.34 + u_amp * 1.25;
+
+  vec2 cells = vec2(84.0, 19.0);
+  vec2 grid = floor(p * cells);
+  vec2 cell = fract(p * cells) - 0.5;
+  vec2 pixelCell = vec2(cell.x * 2.7, cell.y * 1.45);
+  float pixel = smoothstep(0.44, 0.22, max(abs(pixelCell.x), abs(pixelCell.y)));
+
+  float x = grid.x / cells.x;
+  float y = (grid.y / cells.y) * 2.0 - 1.0;
+
+  float columnSeed = floor(x * cells.x);
+  float stepped =
+    pow(abs(sin(columnSeed * 0.47 + t * 1.6)), 5.0) * 0.56 +
+    pow(abs(sin(columnSeed * 1.13 - t * 2.1)), 8.0) * 0.34 +
+    pow(abs(sin(columnSeed * 0.21 + t * 0.7)), 4.0) * 0.16;
+  float envelope =
+    0.08 +
+    stepped * 0.34;
+  envelope *= amp;
+
+  float rowActive = step(abs(y), envelope);
+  float centerLine = step(abs(y), 0.08);
+  float active = max(rowActive, centerLine * 0.42);
+
+  vec3 greyDot = vec3(0.74, 0.77, 0.80);
+  vec3 orange = vec3(1.0, 0.34, 0.0);
+
+  float breathe = 0.84 + 0.16 * sin(t * 3.0 + columnSeed * 0.18);
+  vec3 dotColor = mix(greyDot, orange, active);
+
+  float alpha = pixel * (0.045 + active * 0.92 * breathe);
+  vec3 color = dotColor;
+
+  gl_FragColor = vec4(color, alpha);
+}
+`;
+
+function createShader(
+  gl: WebGLRenderingContext,
+  type: number,
+  source: string
+): WebGLShader | null {
+  const shader = gl.createShader(type);
+  if (!shader) return null;
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error("[RecordingWaveformShader] shader compile failed", gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    return null;
+  }
+  return shader;
+}
+
+function createProgram(gl: WebGLRenderingContext): WebGLProgram | null {
+  const vertex = createShader(gl, gl.VERTEX_SHADER, WAVE_VERTEX_SHADER);
+  const fragment = createShader(gl, gl.FRAGMENT_SHADER, WAVE_FRAGMENT_SHADER);
+  if (!vertex || !fragment) return null;
+
+  const program = gl.createProgram();
+  if (!program) return null;
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  gl.linkProgram(program);
+
+  gl.deleteShader(vertex);
+  gl.deleteShader(fragment);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error("[RecordingWaveformShader] program link failed", gl.getProgramInfoLog(program));
+    gl.deleteProgram(program);
+    return null;
+  }
+
+  return program;
+}
+
+function RecordingWaveformShader({
   getAmplitude,
 }: {
   getAmplitude: () => number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
-  const [dotAmps, setDotAmps] = useState([0.2, 0.3, 0.15]);
 
-  // Keep a stable ref to getAmplitude so setInterval/rAF closures always read fresh
   const getAmpRef = useRef(getAmplitude);
   useEffect(() => {
     getAmpRef.current = getAmplitude;
   }, [getAmplitude]);
 
-  // Canvas waveform at 60 fps — no React state updates, pure canvas
   useEffect(() => {
-    function draw() {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      const amp = getAmpRef.current();
-      const { width: W, height: H } = canvas;
-      ctx.clearRect(0, 0, W, H);
+    const gl = canvas.getContext("webgl", {
+      alpha: true,
+      antialias: true,
+      preserveDrawingBuffer: false,
+    });
+    if (!gl) return;
 
-      const barW = W / BAR_COUNT;
-      const gap = barW * 0.35;
+    const program = createProgram(gl);
+    if (!program) return;
 
-      for (let i = 0; i < BAR_COUNT; i++) {
-        // Per-bar noise: sine ripple that shifts over time — looks organic
-        const noise = Math.sin(Date.now() * 0.003 + i * 0.75) * 0.35 + 0.65;
-        const barAmp = amp * noise;
-        const barH = Math.max(3, barAmp * H * 0.85);
-        const x = i * barW + gap / 2;
-        const y = (H - barH) / 2;
+    const positionLocation = gl.getAttribLocation(program, "a_position");
+    const resolutionLocation = gl.getUniformLocation(program, "u_resolution");
+    const timeLocation = gl.getUniformLocation(program, "u_time");
+    const ampLocation = gl.getUniformLocation(program, "u_amp");
 
-        ctx.fillStyle = `rgba(239,68,68,${0.3 + barAmp * 0.55})`;
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(x, y, barW - gap, barH, 2);
-        } else {
-          ctx.rect(x, y, barW - gap, barH);
-        }
-        ctx.fill();
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+      gl.STATIC_DRAW
+    );
+
+    let smoothedAmp = 0;
+
+    function resize() {
+      if (!canvas || !gl) return;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const width = Math.max(1, Math.floor(rect.width * dpr));
+      const height = Math.max(1, Math.floor(rect.height * dpr));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
       }
+      gl.viewport(0, 0, width, height);
+    }
+
+    function draw(now: number) {
+      resize();
+      smoothedAmp += (getAmpRef.current() - smoothedAmp) * 0.16;
+
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(program);
+      gl.enableVertexAttribArray(positionLocation);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+      gl.uniform1f(timeLocation, now);
+      gl.uniform1f(ampLocation, smoothedAmp);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
 
       rafRef.current = requestAnimationFrame(draw);
     }
@@ -80,46 +197,24 @@ function ListeningBlock({
     rafRef.current = requestAnimationFrame(draw);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (buffer) gl.deleteBuffer(buffer);
+      gl.deleteProgram(program);
     };
   }, []);
 
-  // Dot amplitudes updated at ~12 fps — each dot gets slight variation
-  useEffect(() => {
-    const id = setInterval(() => {
-      const amp = getAmpRef.current();
-      setDotAmps([
-        amp * (0.65 + Math.random() * 0.35),
-        amp * (0.80 + Math.random() * 0.20),
-        amp * (0.55 + Math.random() * 0.45),
-      ]);
-    }, 80);
-    return () => clearInterval(id);
-  }, []);
-
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex w-full flex-col items-center gap-3">
       <canvas
         ref={canvasRef}
-        width={200}
-        height={36}
-        className="rounded opacity-75"
+        className="h-28 w-full max-w-md rounded-[28px] opacity-100"
       />
       <div className="flex items-center gap-2">
         <p className="text-sm text-muted-foreground">Listening</p>
-        {/* Dots scale/opacity track per-dot amplitude */}
-        <div className="flex items-end gap-1" style={{ height: 20 }}>
-          {dotAmps.map((amp, i) => (
-            <motion.span
-              key={i}
-              className="inline-block w-[5px] rounded-full bg-red-400"
-              animate={{
-                height: `${Math.round(6 + amp * 14)}px`,
-                opacity: 0.45 + amp * 0.55,
-              }}
-              transition={{ duration: 0.1, ease: "easeOut" }}
-            />
-          ))}
-        </div>
+        <motion.span
+          className="h-2 w-2 rounded-full bg-[#ff4d00]"
+          animate={{ opacity: [0.3, 1, 0.3], scale: [0.9, 1.25, 0.9] }}
+          transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
+        />
       </div>
     </div>
   );
@@ -154,18 +249,51 @@ function TranscribingBlock() {
   );
 }
 
+function ModeToggleButton({
+  mode,
+  disabled,
+  onClick,
+}: {
+  mode: "type" | "voice";
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const Icon = mode === "type" ? Keyboard : Mic;
+  const label = mode === "type" ? "TYPE" : "VOICE";
+
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      whileHover={disabled ? {} : { scale: 1.04, y: -1 }}
+      whileTap={disabled ? {} : { scale: 0.96 }}
+      transition={{ type: "spring", stiffness: 360, damping: 24 }}
+      className="group flex items-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.04] px-3.5 py-2 text-foreground/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur transition-colors hover:bg-foreground/[0.07] hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-35"
+      aria-label={mode === "type" ? "Switch to typing" : "Switch to voice"}
+    >
+      <Icon className="h-4 w-4" />
+      <span className="font-mono text-[11px] font-medium tracking-[0.18em]">
+        {label}
+      </span>
+    </motion.button>
+  );
+}
+
 // ─── VoiceInput ───────────────────────────────────────────────────────────────
 
 export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [transcript, setTranscript] = useState("");
-  const [elapsed, setElapsed] = useState(0);
+  const [fallbackTextStarted, setFallbackTextStarted] = useState(false);
 
   const capture = useAudioCapture();
 
   // Timers
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const transcriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Store the final WAV blob so it can be passed through to onSubmit
@@ -186,7 +314,6 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
   useEffect(() => {
     return () => {
       if (autoStopRef.current) clearTimeout(autoStopRef.current);
-      if (tickRef.current) clearInterval(tickRef.current);
       if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
     };
   }, []);
@@ -219,14 +346,8 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
     try {
       await capture.start();
       setVoiceState("recording");
-      setElapsed(0);
 
-      tickRef.current = setInterval(
-        () => setElapsed((s) => s + 1),
-        1000
-      );
-
-      // Auto-stop after 30s — uses ref so it always calls the latest stop()
+      // Safety auto-stop after 10 minutes — users normally tap to finish.
       autoStopRef.current = setTimeout(
         () => void stopAndProcess(),
         MAX_DURATION_MS
@@ -240,7 +361,6 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
   async function stopAndProcess() {
     if (disabled && voiceState === "idle") return;
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
-    if (tickRef.current) clearInterval(tickRef.current);
 
     setVoiceState("transcribing");
 
@@ -303,20 +423,27 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
 
   function handleSwitchToText() {
     if (disabled) return;
+    setFallbackTextStarted(false);
     setVoiceState("typing");
   }
 
   function handleSwitchToVoice() {
+    setFallbackTextStarted(false);
     setVoiceState("idle");
   }
-
-  const remaining = Math.max(0, 30 - elapsed);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full py-2">
-      <AnimatePresence mode="wait">
+    <div className="flex min-h-[260px] w-full flex-col">
+      <div
+        className={`flex flex-1 flex-col items-center justify-center gap-6 px-6 ${
+          voiceState === "typing" || voiceState === "confirming" || voiceState === "error"
+            ? "py-6"
+            : "py-16"
+        }`}
+      >
+        <AnimatePresence mode="wait">
 
         {/* ── IDLE ── */}
         {voiceState === "idle" && (
@@ -349,18 +476,6 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
               {disabled ? "Listen first" : "Tap to speak"}
             </p>
 
-            {/* Secondary affordance — intentionally quiet */}
-            <motion.button
-              onClick={handleSwitchToText}
-              disabled={disabled}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5, duration: 0.3 }}
-              className="flex items-center gap-1.5 rounded px-1 text-xs text-muted-foreground/50 transition-colors duration-200 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed"
-            >
-              <Keyboard className="h-3 w-3" />
-              type instead
-            </motion.button>
           </motion.div>
         )}
 
@@ -372,31 +487,21 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
             transition={{ duration: 0.25 }}
-            className="flex flex-col items-center gap-5 w-full"
+            className="flex w-full flex-col items-center gap-5"
           >
-            {/* Active mic button */}
+            {/* Waveform shader runs only while recording */}
+            <RecordingWaveformShader getAmplitude={capture.getAmplitude} />
+
             <motion.button
               onClick={handleTapStop}
-              whileTap={{ scale: 0.94 }}
-              className="relative flex h-28 w-28 items-center justify-center rounded-full border-2 border-red-500/60 bg-card shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.96 }}
+              className="group relative isolate -mt-3 flex h-16 min-w-48 items-center justify-center overflow-hidden rounded-[999px] bg-[#111820] text-white shadow-none transition-transform hover:scale-[1.03] hover:bg-[#0b1118] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
-              {/* Breathing ring */}
-              <motion.span
-                className="absolute inset-0 rounded-full bg-red-500/10"
-                animate={{ scale: [1, 1.2, 1], opacity: [0.25, 0.65, 0.25] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              />
-              {/* Red record dot */}
-              <motion.span
-                className="absolute top-3 right-3 h-2.5 w-2.5 rounded-full bg-red-500"
-                animate={{ opacity: [1, 0.2, 1] }}
-                transition={{ duration: 1.1, repeat: Infinity }}
-              />
-              <Mic className="h-8 w-8 text-red-500/70" />
+              <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_45%)]" />
+              <span className="pointer-events-none absolute -left-20 top-0 h-full w-20 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-72" />
+              <Mic className="relative z-10 h-5 w-5" />
             </motion.button>
-
-            {/* Waveform always visible */}
-            <ListeningBlock getAmplitude={capture.getAmplitude} />
 
             {/* Live transcript — fades in as words arrive from streaming STT */}
             <AnimatePresence>
@@ -414,9 +519,6 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
               )}
             </AnimatePresence>
 
-            <p className="text-xs tabular-nums text-muted-foreground/50">
-              {remaining}s remaining — tap when you&apos;re done
-            </p>
           </motion.div>
         )}
 
@@ -450,31 +552,48 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.35 }}
-            className="flex flex-col gap-4 w-full"
+            className="relative flex w-full flex-col gap-4 pb-14"
           >
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground/70">
               Here&apos;s what I heard — fix anything before confirming.
             </p>
 
-            <div className="relative rounded-2xl border border-border bg-muted/30 focus-within:border-foreground/30 transition-colors duration-200">
+            <div className="relative">
               <textarea
                 value={transcript}
                 onChange={(e) => setTranscript(e.target.value)}
                 rows={4}
                 autoFocus
-                className="w-full resize-none rounded-2xl bg-transparent px-5 py-4 text-base leading-relaxed text-foreground focus:outline-none"
+                className="font-matter scrollbar-thin scrollbar-thumb-foreground/20 scrollbar-track-transparent min-h-[180px] w-full resize-none bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-relaxed text-transparent caret-transparent outline-none md:text-[2rem]"
               />
+              <div className="pointer-events-none absolute inset-0 overflow-hidden px-2 py-2">
+                <div className="font-matter whitespace-pre-wrap break-words text-[1.6rem] font-medium leading-relaxed text-foreground md:text-[2rem]">
+                  {transcript}
+                  <motion.span
+                    className="ml-1 inline-block h-[1.6rem] w-[5px] translate-y-1 rounded-full bg-[#ff4d00] md:h-[2rem] md:w-[6px]"
+                    animate={{ opacity: [0, 1, 1, 0] }}
+                    transition={{ duration: 1.05, repeat: Infinity, times: [0, 0.2, 0.72, 1] }}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between">
               <button
                 onClick={handleRetry}
-                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                className="text-sm text-muted-foreground/70 transition-colors hover:text-foreground"
               >
                 Try again
               </button>
-              <Button onClick={handleSubmit} disabled={disabled || !transcript.trim()}>
-                Looks right →
+              <Button
+                variant="ghost"
+                onClick={handleSubmit}
+                disabled={disabled || !transcript.trim()}
+                className="group relative isolate h-10 overflow-hidden rounded-full bg-[#111820] px-5 text-sm font-medium text-white shadow-none transition-transform hover:scale-[1.03] hover:bg-[#0b1118] hover:text-white disabled:opacity-45"
+              >
+                <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_45%)]" />
+                <span className="pointer-events-none absolute -left-12 top-0 h-full w-12 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-48" />
+                <span className="relative z-10">Looks right →</span>
               </Button>
             </div>
           </motion.div>
@@ -490,12 +609,10 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
             transition={{ duration: 0.25 }}
             className="flex flex-col gap-4 w-full"
           >
-            <p className="text-sm text-amber-600 dark:text-amber-400">
-              I didn&apos;t catch that — try typing instead.
-            </p>
             <TextInput
               question={question}
               disabled={disabled}
+              onTextChange={(value) => setFallbackTextStarted(value.trim().length > 0)}
               onSubmit={(v) =>
                 onSubmit({
                   type: "voice",
@@ -528,21 +645,48 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
                 })
               }
             />
-            {/* Escape hatch back to voice */}
-            <motion.button
-              onClick={handleSwitchToVoice}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.35, duration: 0.25 }}
-              className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground/45 hover:text-muted-foreground transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded px-1 py-0.5 self-center"
-            >
-              <Mic className="h-3 w-3" />
-              use voice instead
-            </motion.button>
           </motion.div>
         )}
 
-      </AnimatePresence>
+        </AnimatePresence>
+      </div>
+      <div className="grid grid-cols-[1fr_auto] items-center gap-4 pt-6">
+        <div>
+          <AnimatePresence>
+            {voiceState === "error" && !fallbackTextStarted && (
+              <motion.p
+                className="text-sm text-[#b66100]"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+              >
+                I didn&apos;t catch that — try typing instead.
+              </motion.p>
+            )}
+          </AnimatePresence>
+        </div>
+        <div className="flex justify-end">
+          <AnimatePresence>
+            {voiceState === "idle" && (
+              <ModeToggleButton
+                key="switch-to-type"
+                mode="type"
+                disabled={disabled}
+                onClick={handleSwitchToText}
+              />
+            )}
+            {voiceState === "typing" && (
+              <ModeToggleButton
+                key="switch-to-voice"
+                mode="voice"
+                disabled={disabled}
+                onClick={handleSwitchToVoice}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 }

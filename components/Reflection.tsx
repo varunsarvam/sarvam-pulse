@@ -416,14 +416,24 @@ export function Reflection({
   if (splitLayout) {
     return (
       <div
-        className="flex min-h-screen w-full flex-col gap-6 bg-[url('/bg-blue.png')] bg-cover bg-center bg-no-repeat p-5 md:flex-row md:p-8"
+        className="flex min-h-screen w-full -translate-y-6 flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8"
         role={showContinue ? "button" : undefined}
         tabIndex={showContinue ? 0 : undefined}
         onClick={handleCardClick}
         onKeyDown={handleCardKeyDown}
       >
+        <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
+          <motion.h1
+            className="font-display max-w-2xl text-left text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: "easeOut" }}
+          >
+            {copy}
+          </motion.h1>
+        </div>
         <div className="flex w-full items-center justify-center md:w-[45%]">
-          <div className="relative flex w-full max-w-xl flex-col items-center justify-center gap-8 rounded-3xl bg-white p-8 text-black shadow-2xl md:p-12">
+          <div className="relative flex w-full max-w-2xl flex-col items-center justify-center gap-8 rounded-3xl bg-white p-9 text-black shadow-2xl md:p-14">
             {splitVisual}
 
             <motion.div
@@ -490,16 +500,6 @@ export function Reflection({
               </p>
             )}
           </div>
-        </div>
-        <div className="flex w-full items-center px-4 pb-10 md:w-[55%] md:px-10 md:pb-0">
-          <motion.p
-            className="font-display max-w-2xl text-left text-4xl leading-tight tracking-tight text-white md:text-5xl"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: "easeOut" }}
-          >
-            {copy}
-          </motion.p>
         </div>
       </div>
     );

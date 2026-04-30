@@ -9,10 +9,27 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Matter";
+  src: url("/fonts/MatterRegular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Matter";
+  src: url("/fonts/MatterMedium.woff") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
   --font-display: "Seasons Mix", serif;
+  --font-matter: "Matter", sans-serif;
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
   --card: 0 0% 100%;
@@ -69,6 +86,8 @@
 
 @theme inline {
   --font-display: var(--font-display);
+  --font-matter: var(--font-matter);
+  --font-sans: var(--font-matter);
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
@@ -106,4 +125,5 @@
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  font-family: var(--font-matter);
 }

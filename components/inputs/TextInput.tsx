@@ -9,9 +9,15 @@ interface TextInputProps {
   question: Question;
   onSubmit: (value: { type: "text"; value: string }) => void;
   disabled?: boolean;
+  onTextChange?: (value: string) => void;
 }
 
-export function TextInput({ question, onSubmit, disabled = false }: TextInputProps) {
+export function TextInput({
+  question,
+  onSubmit,
+  disabled = false,
+  onTextChange,
+}: TextInputProps) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -37,49 +43,58 @@ export function TextInput({ question, onSubmit, disabled = false }: TextInputPro
   const showButton = text.trim().length > 3;
 
   return (
-    <div className="flex flex-col gap-4 w-full">
-      <div className="relative rounded-2xl border border-border bg-muted/30 focus-within:border-foreground/30 transition-colors duration-200">
+    <div className="relative flex w-full flex-col gap-4 pb-14">
+      <div className="relative">
         <textarea
           ref={ref}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            onTextChange?.(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder="Take your time..."
           rows={5}
-          className="w-full resize-none rounded-2xl bg-transparent px-5 py-4 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:outline-none disabled:cursor-not-allowed"
+          aria-label="Text answer"
+          className="font-matter scrollbar-thin scrollbar-thumb-foreground/20 scrollbar-track-transparent min-h-[180px] w-full resize-none bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-relaxed text-transparent caret-transparent outline-none disabled:cursor-not-allowed md:text-[2rem]"
         />
+        <div className="pointer-events-none absolute inset-0 overflow-hidden px-2 py-2">
+          <div className="font-matter whitespace-pre-wrap break-words text-[1.6rem] font-medium leading-relaxed text-foreground md:text-[2rem]">
+            {text || (
+              <span className="text-foreground/25">Take your time...</span>
+            )}
+            <motion.span
+              className="ml-1 inline-block h-[1.6rem] w-[5px] translate-y-1 rounded-full bg-[#ff4d00] md:h-[2rem] md:w-[6px]"
+              animate={{ opacity: [0, 1, 1, 0] }}
+              transition={{ duration: 1.05, repeat: Infinity, times: [0, 0.2, 0.72, 1] }}
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between min-h-[40px]">
-        <p className="text-xs text-muted-foreground/60 select-none">
-          {showButton ? (
-            <>
-              <kbd className="font-mono">⌘</kbd>
-              <span> + </span>
-              <kbd className="font-mono">↵</kbd>
-              <span> to send</span>
-            </>
-          ) : (
-            text.length > 0 && "Keep going…"
-          )}
-        </p>
-
-        <AnimatePresence>
-          {showButton && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.88, y: 6 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.88, y: 6 }}
-              transition={{ duration: 0.2, ease: "easeOut" as const }}
+      <AnimatePresence>
+        {showButton && (
+          <motion.div
+            className="absolute bottom-0 left-0"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.25, ease: "easeOut" as const }}
+          >
+            <Button
+              variant="ghost"
+              onClick={submit}
+              size="lg"
+              className="group relative isolate h-10 overflow-hidden rounded-full bg-[#111820] px-5 text-sm font-medium text-white shadow-none transition-transform hover:scale-[1.03] hover:bg-[#0b1118] hover:text-white disabled:opacity-45"
+              disabled={disabled}
             >
-              <Button onClick={submit} size="sm" className="px-5" disabled={disabled}>
-                Send →
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_45%)]" />
+              <span className="pointer-events-none absolute -left-12 top-0 h-full w-12 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-48" />
+              <span className="relative z-10">Send →</span>
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
