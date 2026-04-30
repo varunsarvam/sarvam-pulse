@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FormCard } from "@/components/FormCard";
-import { Button } from "@/components/ui/button";
+import { NewFormCard } from "@/components/NewFormCard";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { Form } from "@/lib/types";
 
@@ -46,56 +46,36 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-background">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
-        <header className="flex items-center justify-between gap-6">
-          <div>
-            <p className="text-xs font-medium tracking-[0.24em] uppercase text-muted-foreground">
-              Pulse
-            </p>
-            <h1 className="mt-2 text-4xl font-bold tracking-tight">
-              Conversational forms
-            </h1>
-          </div>
-          <Button asChild size="lg" className="px-6">
-            <Link href="/create">+ New form</Link>
-          </Button>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
+        <header>
+          <p className="text-xs font-medium tracking-[0.24em] uppercase text-muted-foreground">
+            Pulse
+          </p>
+          <h1 className="mt-1 text-4xl font-bold tracking-tight">
+            Conversational forms
+          </h1>
         </header>
 
-        {forms.length === 0 ? (
-          <section className="flex min-h-[60vh] items-center justify-center">
-            <div className="flex max-w-md flex-col items-center gap-5 text-center">
-              <h2 className="text-3xl font-semibold tracking-tight">
-                Build your first conversational form.
-              </h2>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Pulse turns questions into a moment of expression. Make a form
-                and share it with anyone.
-              </p>
-              <Button asChild size="lg" className="px-8">
-                <Link href="/create">Create your first form</Link>
-              </Button>
-            </div>
-          </section>
-        ) : (
-          <section className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {forms.map((form, index) => {
-              const count = counts.get(form.id) ?? {
-                responseCount: 0,
-                completedCount: 0,
-              };
+        <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {forms.map((form, index) => {
+            const count = counts.get(form.id) ?? {
+              responseCount: 0,
+              completedCount: 0,
+            };
+            return (
+              <FormCard
+                key={form.id}
+                form={form}
+                responseCount={count.responseCount}
+                completedCount={count.completedCount}
+                index={index}
+              />
+            );
+          })}
 
-              return (
-                <FormCard
-                  key={form.id}
-                  form={form}
-                  responseCount={count.responseCount}
-                  completedCount={count.completedCount}
-                  index={index}
-                />
-              );
-            })}
-          </section>
-        )}
+          {/* New form card — always last */}
+          <NewFormCard index={forms.length} />
+        </section>
       </div>
     </main>
   );
