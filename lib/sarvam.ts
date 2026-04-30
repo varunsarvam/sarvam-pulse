@@ -6,7 +6,7 @@ const TONE_VOICE: Record<string, string> = {
   insightful: "varun",
   playful: "anushka",
   calm: "neha",
-  direct: "rahul",
+  direct: "advait",
 };
 
 export function mapToneToVoice(tone: string): string {
