@@ -59,10 +59,10 @@ function SortableItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-3 rounded-xl border bg-card px-4 py-3.5 text-card-foreground shadow-sm select-none transition-shadow duration-150 ${
+      className={`flex items-center gap-3 rounded-xl border bg-white px-4 py-3.5 text-zinc-900 select-none transition-all duration-150 ${
         isDragging
-          ? "shadow-xl border-foreground/20 opacity-95 scale-[1.02]"
-          : "border-border"
+          ? "border-zinc-400 opacity-95 scale-[1.02]"
+          : "border-zinc-200"
       }`}
     >
       {/* Rank badge */}
@@ -137,9 +137,15 @@ export function Ranking({ question, options, onSubmit, disabled = false }: Ranki
         </SortableContext>
       </DndContext>
 
-      <Button onClick={submit} className="w-full mt-2" disabled={disabled}>
-        Lock in my ranking
-      </Button>
+      <button
+        onClick={submit}
+        disabled={disabled}
+        className="group relative isolate mt-2 flex h-11 w-full items-center justify-center overflow-hidden rounded-full bg-[#111820] text-sm font-medium text-white transition-transform hover:scale-[1.02] hover:bg-[#0b1118] disabled:opacity-45"
+      >
+        <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_45%)]" />
+        <span className="pointer-events-none absolute -left-12 top-0 h-full w-12 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-96" />
+        <span className="relative z-10">Lock in my ranking →</span>
+      </button>
     </div>
   );
 }

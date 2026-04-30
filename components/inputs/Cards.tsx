@@ -45,7 +45,7 @@ export function Cards({ question, options, onSubmit, disabled = false }: CardsPr
             whileHover={!disabled && selected === null ? { scale: 1.015 } : {}}
             whileTap={!disabled && selected === null ? { scale: 0.98 } : {}}
             transition={{ type: "spring", stiffness: 340, damping: 26 }}
-            className="relative w-full rounded-xl border border-border bg-card px-5 py-4 text-left text-base font-medium text-card-foreground shadow-sm cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="relative w-full rounded-xl border border-zinc-200 bg-white px-5 py-4 text-left text-base font-medium text-zinc-900 cursor-pointer disabled:cursor-default focus-visible:outline-none"
           >
             {/* Glow ring on selected */}
             {isSelected && (
@@ -54,9 +54,7 @@ export function Cards({ question, options, onSubmit, disabled = false }: CardsPr
                 className="pointer-events-none absolute inset-0 rounded-xl"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                style={{
-                  boxShadow: "0 0 0 2px hsl(var(--foreground) / 0.7), 0 4px 24px hsl(var(--foreground) / 0.12)",
-                }}
+                style={{ boxShadow: "inset 0 0 0 1.5px rgba(0,0,0,0.55)" }}
               />
             )}
             {opt}
