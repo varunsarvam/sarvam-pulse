@@ -46,12 +46,14 @@ function EmojiCard({
   label,
   selected,
   disabled,
+  showTooltip,
   onClick,
 }: {
   step: typeof STEPS[number];
   label: string;
   selected: boolean;
   disabled: boolean;
+  showTooltip: boolean;
   onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -59,9 +61,9 @@ function EmojiCard({
 
   return (
     <div className="relative flex flex-col items-center">
-      {/* Tooltip */}
+      {/* Tooltip — only on first and last emoji */}
       <AnimatePresence>
-        {hovered && !selected && (
+        {hovered && !selected && showTooltip && (
           <motion.div
             className="absolute -top-10 z-20 whitespace-nowrap rounded-full bg-zinc-900 px-3 py-1 text-[11px] font-semibold text-white shadow-lg"
             initial={{ opacity: 0, y: 4, scale: 0.88 }}
@@ -153,6 +155,7 @@ export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSlide
               label={i === 0 ? minLabel : i === lastIdx ? maxLabel : s.label}
               selected={selected === s.value}
               disabled={disabled || submitted}
+              showTooltip={i === 0 || i === lastIdx}
               onClick={() => handlePick(s.value)}
             />
           ))}
