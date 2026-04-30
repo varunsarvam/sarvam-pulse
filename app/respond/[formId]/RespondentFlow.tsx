@@ -366,7 +366,7 @@ function NameFieldInput({
   }
 
   return (
-    <div className="flex w-full flex-col gap-7 py-2">
+    <div className="flex w-full flex-col items-center gap-6">
       <div className="relative w-full">
         <input
           ref={inputRef}
@@ -398,11 +398,10 @@ function NameFieldInput({
         )}
       </div>
 
-      <div className="flex min-h-16 justify-center">
-        <AnimatePresence>
+      <AnimatePresence>
           {name.trim().length > 0 && (
             <motion.div
-              className="mx-auto w-fit"
+              className="w-fit"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
@@ -422,7 +421,6 @@ function NameFieldInput({
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
     </div>
   );
 }
@@ -762,7 +760,7 @@ function QuestionStage({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.97 }}
                 transition={{ duration: 0.45, ease: "easeOut" }}
-                className="w-full max-w-2xl rounded-3xl bg-white p-6 text-black shadow-2xl"
+                className="flex min-h-[240px] w-full max-w-2xl flex-col items-center justify-center rounded-3xl bg-white p-8 text-black shadow-2xl"
               >
                 {inputArea}
               </motion.div>
