@@ -1,4 +1,5 @@
 export type InputType =
+  | "name"
   | "voice"
   | "text"
   | "emoji_slider"

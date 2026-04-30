@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chatCompleteStream } from "@/lib/sarvam";
+import { NAME_QUESTION_PROMPT } from "@/lib/schemas";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
       session_id,
       response_mode,
       respondent_name,
+      input_type,
     } = body;
     question_prompt = body.question_prompt ?? "";
 
@@ -56,6 +58,12 @@ export async function POST(req: NextRequest) {
         { error: "question_prompt and tone are required." },
         { status: 400 }
       );
+    }
+
+    // Name questions use a constant phrasing, never LLM-rephrased.
+    if (input_type === "name") {
+      console.timeEnd("phrase-total");
+      return NextResponse.json({ phrased: NAME_QUESTION_PROMPT });
     }
 
     const cacheKey = session_id

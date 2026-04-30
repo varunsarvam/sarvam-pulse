@@ -56,6 +56,7 @@ const OPTIONS_TYPES: InputType[] = [
 ];
 
 const INPUT_TYPE_LABELS: Record<InputType, string> = {
+  name: "Name",
   voice: "Voice",
   text: "Text",
   emoji_slider: "Emoji Slider",

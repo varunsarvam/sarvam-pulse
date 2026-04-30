@@ -91,7 +91,7 @@ export function ReflectionDistribution({
       )}
 
       <div
-        className={`${hideHeadline ? "" : "mt-12"} flex w-full max-w-4xl items-end justify-center gap-10`}
+        className={`${hideHeadline ? "" : "mt-12"} flex w-full max-w-4xl items-start justify-center gap-10`}
       >
         {columns.map((column, columnIndex) => {
           const dots = Array.from({ length: column.count });

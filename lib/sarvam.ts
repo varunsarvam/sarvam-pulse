@@ -45,42 +45,8 @@ export async function transcribeAudio(
 }
 
 // ─── Text to Speech ───────────────────────────────────────────────────────────
-
-export interface TTSOptions {
-  voice?: string;
-  target_language_code?: string;
-}
-
-export interface TTSResult {
-  audios: string[];
-}
-
-export async function textToSpeech(
-  text: string,
-  voice = "anushka",
-  options: TTSOptions = {}
-): Promise<TTSResult> {
-  const res = await fetch("https://api.sarvam.ai/text-to-speech", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-subscription-key": SARVAM_API_KEY,
-    },
-    body: JSON.stringify({
-      inputs: [text],
-      target_language_code: options.target_language_code ?? "en-IN",
-      speaker: voice,
-      model: "bulbul:v3",
-    }),
-  });
-
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Sarvam TTS error ${res.status}: ${error}`);
-  }
-
-  return res.json();
-}
+// TTS is handled by the official `sarvamai` SDK in `app/api/tts/route.ts`
+// (streamed mp3 response). No standalone helper here.
 
 // ─── Chat Completions ─────────────────────────────────────────────────────────
 

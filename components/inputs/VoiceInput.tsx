@@ -177,7 +177,7 @@ function RecordingWaveformShader({
     }
 
     function draw(now: number) {
-      if (!gl) return;
+      if (!gl || !canvas) return;
       resize();
       smoothedAmp += (getAmpRef.current() - smoothedAmp) * 0.16;
 
@@ -216,35 +216,6 @@ function RecordingWaveformShader({
           animate={{ opacity: [0.3, 1, 0.3], scale: [0.9, 1.25, 0.9] }}
           transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
         />
-      </div>
-    </div>
-  );
-}
-
-// ─── TranscribingBlock ────────────────────────────────────────────────────────
-// Frozen placeholder with shimmer — shown while STT request is in flight.
-
-function TranscribingBlock() {
-  return (
-    <div className="flex flex-col items-center gap-3">
-      {/* Frozen waveform placeholder with sliding shimmer */}
-      <div className="relative w-[200px] h-9 rounded bg-muted/40 overflow-hidden">
-        <motion.div
-          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent"
-          animate={{ x: ["-100%", "100%"] }}
-          transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
-        />
-      </div>
-      <div className="flex items-center gap-1.5">
-        <p className="text-sm text-muted-foreground">Transcribing</p>
-        {[0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            className="inline-block w-1 h-1 rounded-full bg-muted-foreground/50"
-            animate={{ opacity: [0.25, 1, 0.25], scale: [0.8, 1.1, 0.8] }}
-            transition={{ duration: 1.3, repeat: Infinity, delay: i * 0.22 }}
-          />
-        ))}
       </div>
     </div>
   );
@@ -305,6 +276,16 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
   const displayedRef = useRef<string>("");
   const typingActiveRef = useRef(false);
 
+  // CONFIRMING textarea + overlay refs (for scroll sync + auto-scroll on tick)
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  function syncOverlayScroll() {
+    if (overlayRef.current && textareaRef.current) {
+      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  }
+
   // Stable ref to capture.stop — prevents stale closure in autoStopRef
   const stopRef = useRef(capture.stop);
   useEffect(() => {
@@ -331,6 +312,14 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
       if (ch !== undefined) {
         displayedRef.current += ch;
         setTranscript(displayedRef.current);
+        // Scroll to bottom so the latest character is always in view as it types.
+        // requestAnimationFrame lets the textarea grow before we read scrollHeight.
+        requestAnimationFrame(() => {
+          if (textareaRef.current) {
+            textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+          }
+          syncOverlayScroll();
+        });
         transcriptTimerRef.current = setTimeout(tick, TYPEWRITER_MS);
       } else {
         typingActiveRef.current = false;
@@ -413,7 +402,6 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
 
   function handleRetry() {
     setTranscript("");
-    setElapsed(0);
     charQueueRef.current = [];
     displayedRef.current = "";
     typingActiveRef.current = false;
@@ -561,14 +549,19 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
 
             <div className="relative">
               <textarea
+                ref={textareaRef}
                 value={transcript}
                 onChange={(e) => setTranscript(e.target.value)}
+                onScroll={syncOverlayScroll}
                 rows={4}
                 autoFocus
-                className="font-matter scrollbar-thin scrollbar-thumb-foreground/20 scrollbar-track-transparent min-h-[180px] w-full resize-none bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-relaxed text-transparent caret-transparent outline-none md:text-[2rem]"
+                className="font-matter scrollbar-none min-h-[180px] max-h-[260px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-snug text-transparent caret-transparent outline-none md:text-[2rem]"
               />
-              <div className="pointer-events-none absolute inset-0 overflow-hidden px-2 py-2">
-                <div className="font-matter whitespace-pre-wrap break-words text-[1.6rem] font-medium leading-relaxed text-foreground md:text-[2rem]">
+              <div
+                ref={overlayRef}
+                className="pointer-events-none absolute inset-0 max-h-[260px] overflow-y-hidden px-2 py-2"
+              >
+                <div className="font-matter whitespace-pre-wrap break-words text-[1.6rem] font-medium leading-snug text-foreground md:text-[2rem]">
                   {transcript}
                   <motion.span
                     className="ml-1 inline-block h-[1.6rem] w-[5px] translate-y-1 rounded-full bg-[#ff4d00] md:h-[2rem] md:w-[6px]"

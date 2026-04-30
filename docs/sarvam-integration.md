@@ -4,9 +4,7 @@ All Sarvam calls are server-side only, in lib/sarvam.ts and called from API rout
 
 ## Authentication
 
-Header: `api-subscription-key: ${SARVAM_API_KEY}` for STT/TTS
-
-Header: `Authorization: Bearer ${SARVAM_API_KEY}` for LLM (verify in dashboard playground)
+Header: `api-subscription-key: ${SARVAM_API_KEY}` for all calls (STT, TTS, LLM). Used uniformly in `lib/sarvam.ts` and the route handlers.
 
 ## Endpoints we use
 
@@ -26,42 +24,28 @@ Response: { transcript: string, language_code: string }
 
 ### Text-to-Speech
 
-POST [https://api.sarvam.ai/text-to-speech](https://api.sarvam.ai/text-to-speech)
+Implemented via the official `sarvamai` SDK in `app/api/tts/route.ts`, using
+`client.textToSpeech.convertStream(...)`. The route returns an `audio/mpeg`
+stream directly to the browser (no base64 round-trip).
 
-Content-Type: application/json
+Parameters:
 
-Body:
+- `model`: `"bulbul:v3"`
+- `target_language_code`: `"en-IN"`
+- `output_audio_codec`: `"mp3"`
+- `output_audio_bitrate`: `"24k"`
+- `pace`: `1.0`, `pitch`: `0`, `loudness`: `1.2`
 
-{
+Voice mapping by tone (authoritative — see `TONE_VOICE` in `lib/sarvam.ts`):
 
-  "text": "<text to speak, max 2500 chars>",
+- `playful` → `"anushka"`
+- `calm` → `"neha"`
+- `direct` → `"rahul"`
+- `insightful` → `"varun"`
 
-  "target_language_code": "en-IN",
-
-  "speaker": "",
-
-  "model": "bulbul:v3",
-
-  "pace": 1.0,
-
-  "pitch": 0,
-
-  "loudness": 1.2
-
-}
-
-Response: { audios: [""] }
-
-Decode base64, return as audio/wav from API route.
-
-Voice mapping by tone:
-
-- playful → "anushka"
-- calm → "manisha"
-- direct → "abhilash"
-- insightful → "vidya"
-
-(Verify these voice IDs in the dashboard. If they've changed, update the mapping.)
+NOTE: The older `textToSpeech()` helper that did a direct fetch + base64 decode
+has been removed from `lib/sarvam.ts`. The route handler is the only TTS
+caller.
 
 ### LLM (Chat Completion)
 

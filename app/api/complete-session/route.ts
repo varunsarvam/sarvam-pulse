@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { chatComplete } from "@/lib/sarvam";
+import {
+  buildClassificationAnswers,
+  classifyIdentity,
+  IdentityClassificationError,
+} from "@/lib/identity";
+import type { ArchetypeCluster, InputTypeSchema } from "@/lib/schemas";
 import type { Aggregation } from "@/lib/types";
-
-interface IdentityResult {
-  label: string;
-  summary: string;
-  highlights: string[];
-}
 
 interface PercentileEntry {
   question_id: string;
@@ -23,88 +22,20 @@ interface AnswerWithQuestion {
   questions: {
     id: string;
     prompt: string;
-    input_type: string;
+    input_type: InputTypeSchema;
+    options: unknown;
+    form_id: string;
   } | null;
 }
 
-interface SessionNameRow {
+interface SessionRow {
   respondent_name: string | null;
+  form_id: string;
 }
 
-function extractAnswerText(
-  raw: { type?: string; value?: unknown } | null,
-  transcript: string | null
-): string {
-  if (transcript && transcript.trim()) return transcript.trim();
-  if (!raw) return "";
-  const v = raw.value;
-  if (typeof v === "string") return v;
-  if (typeof v === "number") return String(v);
-  if (Array.isArray(v)) return v.join(" → ");
-  return JSON.stringify(v ?? "");
-}
-
-function parseIdentity(raw: string): IdentityResult | null {
-  const cleaned = raw
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```\s*$/i, "")
-    .trim();
-
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (
-      typeof parsed.label === "string" &&
-      typeof parsed.summary === "string" &&
-      Array.isArray(parsed.highlights)
-    ) {
-      return {
-        label: parsed.label,
-        summary: parsed.summary,
-        highlights: parsed.highlights
-          .filter((h: unknown): h is string => typeof h === "string")
-          .slice(0, 3),
-      };
-    }
-  } catch {
-    // Try to extract JSON object via regex
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) {
-      try {
-        const parsed = JSON.parse(match[0]);
-        if (
-          typeof parsed.label === "string" &&
-          typeof parsed.summary === "string" &&
-          Array.isArray(parsed.highlights)
-        ) {
-          return {
-            label: parsed.label,
-            summary: parsed.summary,
-            highlights: parsed.highlights
-              .filter((h: unknown): h is string => typeof h === "string")
-              .slice(0, 3),
-          };
-        }
-      } catch {
-        // fall through
-      }
-    }
-  }
-  return null;
-}
-
-function fallbackIdentity(): IdentityResult {
-  return {
-    label: "Quiet Observer",
-    summary:
-      "You took the time to share thoughtful answers — your perspective is uniquely yours.",
-    highlights: [
-      "Engaged with every question",
-      "Brought a thoughtful voice",
-      "Made it through the whole form",
-    ],
-  };
+interface FormRow {
+  intent: string | null;
+  archetype_clusters: ArchetypeCluster[] | null;
 }
 
 /**
@@ -132,7 +63,6 @@ function computeSliderPercentile(
     if (userValue >= b.range[1]) {
       below += b.count;
     } else if (userValue >= b.range[0]) {
-      // Partial bucket: interpolate within
       const frac = (userValue - b.range[0]) / (b.range[1] - b.range[0]);
       below += b.count * frac;
       break;
@@ -154,17 +84,50 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient();
 
-    const { data: sessionData } = await supabase
+    // ── 1. Session row (need form_id + name) ─────────────────────────────────
+    const { data: sessionRow } = await supabase
       .from("sessions")
-      .select("respondent_name")
+      .select("respondent_name, form_id")
       .eq("id", session_id)
       .maybeSingle();
+
+    const session = sessionRow as SessionRow | null;
+    if (!session?.form_id) {
+      return NextResponse.json(
+        { error: "Session not found" },
+        { status: 404 }
+      );
+    }
     const respondentName =
-      typeof (sessionData as SessionNameRow | null)?.respondent_name === "string"
-        ? (sessionData as SessionNameRow).respondent_name
+      typeof session.respondent_name === "string"
+        ? session.respondent_name
         : null;
 
-    // ── Phase 1: Fetch all answers joined with their question ──
+    // ── 2. Form row (need intent + archetype_clusters) ──────────────────────
+    const { data: formRow, error: formError } = await supabase
+      .from("forms")
+      .select("intent, archetype_clusters")
+      .eq("id", session.form_id)
+      .maybeSingle();
+
+    if (formError || !formRow) {
+      console.error("[complete-session] fetch form error:", formError);
+      return NextResponse.json(
+        { error: "Form not found" },
+        { status: 404 }
+      );
+    }
+    const form = formRow as FormRow;
+    const archetypeClusters = (form.archetype_clusters ?? []) as ArchetypeCluster[];
+    if (archetypeClusters.length === 0) {
+      console.error("[complete-session] form has no archetype clusters");
+      return NextResponse.json(
+        { error: "form_misconfigured", message: "Form has no archetypes." },
+        { status: 500 }
+      );
+    }
+
+    // ── 3. Answers + joined questions ────────────────────────────────────────
     const { data: answersData, error: answersError } = await supabase
       .from("answers")
       .select(
@@ -172,7 +135,7 @@ export async function POST(req: NextRequest) {
         raw_value,
         transcript,
         normalized,
-        questions ( id, prompt, input_type )
+        questions ( id, prompt, input_type, options, form_id )
       `
       )
       .eq("session_id", session_id)
@@ -195,62 +158,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Phase 2: Build context for the LLM ──
-    const contextPairs = answers
-      .filter((a) => a.questions !== null)
-      .map((a) => ({
-        question: a.questions!.prompt,
-        answer: extractAnswerText(a.raw_value, a.transcript),
-        normalized_cluster: a.normalized?.cluster ?? null,
-      }))
-      .filter((p) => p.answer.length > 0);
+    // ── 4. Classify identity ─────────────────────────────────────────────────
+    const classificationAnswers = buildClassificationAnswers(answers);
 
-    const userMessage = contextPairs
-      .map((p, i) => {
-        const cluster = p.normalized_cluster
-          ? ` [theme: ${p.normalized_cluster}]`
-          : "";
-        return `Q${i + 1}: ${p.question}\nA${i + 1}: ${p.answer}${cluster}`;
-      })
-      .join("\n\n");
-
-    // ── Phase 3: Call Sarvam-105B for identity ──
-    const nameInstruction = respondentName
-      ? `\n\nThe respondent is named ${respondentName}. The summary should be in second person, addressing them by name once or twice — like '${respondentName}, here's what we heard...' Make it feel personally written for them. The label itself stays archetype-only; do not include the name in the label.`
-      : "";
-
-    const systemPrompt = `Given a respondent's answers across a form about how they live with AI, generate:
-1. An identity label - 2-4 words, evocative, like 'Curious Skeptic' or 'Quiet Optimist' or 'Bold Pragmatist' or 'Cautious Adopter'. It should feel like a personality archetype that captures their stance.
-2. A 1-2 sentence summary of their perspective in their own voice.
-3. 3 standout 'highlights' - their most distinctive moments from the form.
-${nameInstruction}
-
-Output strict JSON only, no preamble or markdown: { "label": "...", "summary": "...", "highlights": ["...", "...", "..."] }`;
-
-    let identity: IdentityResult;
+    let identity;
     try {
-      const llmRes = await chatComplete(
-        [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
-        ],
+      identity = await classifyIdentity({
+        formIntent: form.intent ?? "",
+        archetypeClusters,
+        answers: classificationAnswers,
+        respondentName,
+      });
+    } catch (err) {
+      if (err instanceof IdentityClassificationError) {
+        console.error(
+          `[complete-session] classifyIdentity (${err.kind}) failed:`,
+          err.message
+        );
+      } else {
+        console.error("[complete-session] classifyIdentity unexpected:", err);
+      }
+      // Phase 5 architectural decision: NO generic fallback. Surface the error
+      // so the client can show a real error state and the user can retry. The
+      // alternative ("Quiet Observer") was misleading users.
+      return NextResponse.json(
         {
-          model: "sarvam-105b",
-          temperature: 0.7,
-          max_tokens: 400,
-          top_p: 1,
-          reasoning_effort: "low",
-        }
+          error: "identity_classification_failed",
+          message:
+            "We couldn't generate your identity right now. Please try again in a moment.",
+        },
+        { status: 502 }
       );
-
-      const raw = llmRes.choices[0]?.message?.content?.trim() ?? "";
-      identity = parseIdentity(raw) ?? fallbackIdentity();
-    } catch (e) {
-      console.error("[complete-session] LLM error:", e);
-      identity = fallbackIdentity();
     }
 
-    // ── Phase 4: Update sessions row with identity ──
+    // ── 5. Update sessions row ───────────────────────────────────────────────
     const { error: updateError } = await supabase
       .from("sessions")
       .update({
@@ -264,7 +205,7 @@ Output strict JSON only, no preamble or markdown: { "label": "...", "summary": "
       console.error("[complete-session] update session error:", updateError);
     }
 
-    // ── Phase 5: Compute percentiles for emoji_slider questions ──
+    // ── 6. Compute percentiles for emoji_slider questions ────────────────────
     const sliderAnswers = answers.filter(
       (a) =>
         a.questions?.input_type === "emoji_slider" &&
@@ -304,7 +245,11 @@ Output strict JSON only, no preamble or markdown: { "label": "...", "summary": "
       }
     }
 
-    return NextResponse.json({ identity, percentiles, respondent_name: respondentName });
+    return NextResponse.json({
+      identity,
+      percentiles,
+      respondent_name: respondentName,
+    });
   } catch (e) {
     console.error("[complete-session] error:", e);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

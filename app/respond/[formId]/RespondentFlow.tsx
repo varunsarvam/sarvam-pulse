@@ -23,6 +23,7 @@ import { CompleteStage } from "@/components/CompleteStage";
 import { playTick, playWhoosh, setSoundMuted } from "@/lib/sounds";
 import type { Form, Question } from "@/lib/types";
 import type { NullReflectionReason, ReflectionResult } from "@/lib/reflection";
+import { NAME_QUESTION_PROMPT } from "@/lib/schemas";
 
 // ─── Option parsers ───────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ function parseVisualOptions(
 
 // ─── Stage types ──────────────────────────────────────────────────────────────
 
-type Stage = "ENTRY" | "SETUP" | "QUESTION" | "FOLLOWUP" | "REFLECTION" | "COMPLETE";
+type Stage = "ENTRY" | "QUESTION" | "FOLLOWUP" | "REFLECTION" | "COMPLETE";
 
 interface PreloadItem {
   phrased: string;
@@ -343,174 +344,95 @@ function ThinkingDots() {
   );
 }
 
-function NameCard({
-  canContinue,
-  isLoading,
-  name,
-  nameError,
-  onNameChange,
-  onContinue,
+// Name input rendered inside QuestionStage's white card when input_type === "name".
+// Mirrors the typewriter-overlay aesthetic of the previous standalone NameCard,
+// but lives inside the QuestionStage's own white card so it shares the layout.
+function NameFieldInput({
+  onSubmit,
+  disabled,
 }: {
-  canContinue: boolean;
-  isLoading: boolean;
-  name: string;
-  nameError: string | null;
-  onNameChange: (value: string) => void;
-  onContinue: () => void;
+  onSubmit: (value: string) => void;
+  disabled: boolean;
 }) {
+  const [name, setName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (!disabled) inputRef.current?.focus();
+  }, [disabled]);
+
+  const error = name ? validateRespondentName(name) : "Tell us what to call you.";
+  const valid = error === null;
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" && canContinue) {
-      onContinue();
+    if (e.key === "Enter" && valid && !disabled) {
+      onSubmit(normalizeRespondentName(name));
     }
   }
 
+  function handleClick() {
+    if (!valid || disabled) return;
+    onSubmit(normalizeRespondentName(name));
+  }
+
   return (
-    <div className="relative z-10 flex min-h-[360px] w-full max-w-2xl flex-col justify-center gap-7 rounded-3xl bg-white p-9 text-black shadow-2xl md:p-14">
-      <AnimatePresence mode="wait">
-        {isLoading ? (
-          <motion.div
-            key="setup-loading"
-            className="flex flex-col items-center justify-center gap-5 py-8"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-          >
-            <motion.div
-              className="relative h-20 w-20 rounded-full bg-gradient-to-r from-violet-300 via-foreground/80 to-blue-300 p-1"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1.15, repeat: Infinity, ease: "linear" }}
-            >
-              <div className="h-full w-full rounded-full bg-white" />
-              <div className="absolute inset-3 rounded-full bg-gradient-to-br from-violet-200/40 to-blue-200/40 blur-md" />
-            </motion.div>
-            <p className="text-center text-sm text-muted-foreground/70">
-              Opening the first question...
-            </p>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="setup-form"
-            className="flex flex-col gap-7"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-          >
-            <motion.div
-              className="relative w-full max-w-lg"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08, duration: 0.5, ease: "easeOut" }}
-            >
-              <input
-                ref={inputRef}
-                type="text"
-                value={name}
-                onChange={(e) => onNameChange(e.target.value)}
-                onKeyDown={handleKeyDown}
-                aria-label="Your Name"
-                className="font-matter w-full border-0 bg-transparent px-0 py-4 text-center text-[2.4rem] font-medium leading-tight text-transparent caret-transparent outline-none md:text-[3.25rem]"
-                maxLength={30}
-              />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-0 py-4">
-                <span
-                  className={`font-matter text-[2.4rem] font-medium leading-tight md:text-[3.25rem] ${
-                    name ? "text-foreground" : "text-foreground/25"
-                  }`}
-                >
-                  {name || "Your Name"}
-                </span>
-                <motion.span
-                  className="ml-2 h-[2.4rem] w-[5px] rounded-full bg-[#ff4d00] md:h-[3.25rem] md:w-[6px]"
-                  animate={{ opacity: [0, 1, 1, 0] }}
-                  transition={{ duration: 1.05, repeat: Infinity, times: [0, 0.2, 0.72, 1] }}
-                />
-              </div>
-              {nameError && (
-                <p className="mt-2 text-xs text-muted-foreground/70">
-                  {nameError}
-                </p>
-              )}
-            </motion.div>
-
-            <div className="flex min-h-16 justify-center">
-              <AnimatePresence>
-                {name.trim().length > 0 && (
-                <motion.div
-                  className="mx-auto w-fit"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
-                >
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    className="group relative isolate h-16 overflow-hidden rounded-[999px] bg-[#111820] px-12 text-xl font-medium text-white shadow-none transition-transform hover:scale-[1.03] hover:bg-[#0b1118] hover:text-white disabled:opacity-45"
-                    onClick={onContinue}
-                    disabled={!canContinue}
-                  >
-                    <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_45%)]" />
-                    <span className="pointer-events-none absolute -left-20 top-0 h-full w-20 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-96" />
-                    <span className="relative z-10">Begin the conversation →</span>
-                  </Button>
-                </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function SetupScreen({
-  canContinue,
-  isLoading,
-  name,
-  nameError,
-  onNameChange,
-  onContinue,
-}: {
-  canContinue: boolean;
-  isLoading: boolean;
-  name: string;
-  nameError: string | null;
-  onNameChange: (value: string) => void;
-  onContinue: () => void;
-}) {
-  return (
-    <div className="relative flex h-full w-full -translate-y-6 flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8">
-      <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
-        <motion.h1
-          className="font-display max-w-2xl text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-        >
-          The room is getting ready for you to get started.
-        </motion.h1>
-      </div>
-
-      <div className="flex w-full items-center justify-center md:w-[45%]">
-        <NameCard
-          canContinue={canContinue}
-          isLoading={isLoading}
-          name={name}
-          nameError={nameError}
-          onNameChange={onNameChange}
-          onContinue={onContinue}
+    <div className="flex w-full flex-col gap-7 py-2">
+      <div className="relative w-full">
+        <input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-label="Your Name"
+          disabled={disabled}
+          className="font-matter w-full border-0 bg-transparent px-0 py-4 text-center text-[2.4rem] font-medium leading-tight text-transparent caret-transparent outline-none disabled:cursor-not-allowed md:text-[3.25rem]"
+          maxLength={30}
         />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-0 py-4">
+          <span
+            className={`font-matter text-[2.4rem] font-medium leading-tight md:text-[3.25rem] ${
+              name ? "text-foreground" : "text-foreground/25"
+            }`}
+          >
+            {name || "Your Name"}
+          </span>
+          <motion.span
+            className="ml-2 h-[2.4rem] w-[5px] rounded-full bg-[#ff4d00] md:h-[3.25rem] md:w-[6px]"
+            animate={{ opacity: [0, 1, 1, 0] }}
+            transition={{ duration: 1.05, repeat: Infinity, times: [0, 0.2, 0.72, 1] }}
+          />
+        </div>
+        {name && error && (
+          <p className="mt-2 text-center text-xs text-muted-foreground/70">{error}</p>
+        )}
       </div>
 
+      <div className="flex min-h-16 justify-center">
+        <AnimatePresence>
+          {name.trim().length > 0 && (
+            <motion.div
+              className="mx-auto w-fit"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+              <Button
+                variant="ghost"
+                size="lg"
+                className="group relative isolate h-16 overflow-hidden rounded-[999px] bg-[#111820] px-12 text-xl font-medium text-white shadow-none transition-transform hover:scale-[1.03] hover:bg-[#0b1118] hover:text-white disabled:opacity-45"
+                onClick={handleClick}
+                disabled={!valid || disabled}
+              >
+                <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(255,255,255,0.16),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_45%)]" />
+                <span className="pointer-events-none absolute -left-20 top-0 h-full w-20 -skew-x-12 bg-white/30 blur-lg transition-transform duration-700 group-hover:translate-x-96" />
+                <span className="relative z-10">Begin the conversation →</span>
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -672,6 +594,18 @@ function QuestionStage({
       };
     }
 
+    // ── Name questions: skip phrase fetch, use constant + live TTS ──
+    if (question.input_type === "name") {
+      clearTimeout(timeout);
+      queueForTtsThenType(NAME_QUESTION_PROMPT);
+      return () => {
+        cancelled = true;
+        if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
+        if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
+        if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
+      };
+    }
+
     // ── Client-side sessionStorage cache ──
     const clientCacheKey =
       sessionId ? `phrase:${sessionId}:${question.id}` : null;
@@ -697,6 +631,7 @@ function QuestionStage({
         form_intent: formIntent,
         session_id: sessionId,
         respondent_name: respondentName,
+        input_type: question.input_type,
       }),
       signal: controller.signal,
     })
@@ -759,13 +694,17 @@ function QuestionStage({
           }
         }
 
-        if (!cancelled && !ttsTriggered) setThinking(false);
+        if (!cancelled && !ttsTriggered) {
+          // SSE ended without a `done` event — fall back to the raw prompt
+          // and still play TTS so the user hears the question.
+          queueForTtsThenType(question.prompt);
+        }
       })
       .catch(() => {
         if (!cancelled && !ttsTriggered) {
-          setPhrased(question.prompt);
-          setThinking(false);
-          revealInputs(200);
+          // phrase-question failed or aborted (timeout) — play TTS for the
+          // raw prompt rather than leaving the user with silent text.
+          queueForTtsThenType(question.prompt);
         }
       });
 
@@ -785,6 +724,9 @@ function QuestionStage({
   }
   function handleText(v: { type: "text"; value: string }) {
     onAnswer(v);
+  }
+  function handleName(value: string) {
+    onAnswer({ type: "name", value });
   }
   function handleSlider(v: { type: "emoji_slider"; value: number }) {
     onAnswer(v);
@@ -861,6 +803,9 @@ function QuestionStage({
           onSubmit={handleVisual}
           disabled={inputDisabled}
         />
+      )}
+      {input_type === "name" && (
+        <NameFieldInput onSubmit={handleName} disabled={inputDisabled} />
       )}
     </div>
   );
@@ -1069,7 +1014,6 @@ export function RespondentFlow({
   const [stage, setStage] = useState<Stage>("ENTRY");
   const [questionIndex, setQuestionIndex] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [respondentName, setRespondentName] = useState("");
   const [respondentNameSaved, setRespondentNameSaved] = useState<string | null>(null);
   const [followUpPrompt, setFollowUpPrompt] = useState<string | null>(null);
   const [reflectionData, setReflectionData] = useState<ReflectionResult | null>(null);
@@ -1094,14 +1038,16 @@ export function RespondentFlow({
   const [ttsDisplayText, setTtsDisplayText] = useState("");
   const [ttsDone, setTtsDone] = useState(false);
   const [preloadProgress, setPreloadProgress] = useState(0);
-  const [setupMinElapsed, setSetupMinElapsed] = useState(false);
   const [preloadError, setPreloadError] = useState(false);
-  const [setupSubmitted, setSetupSubmitted] = useState(false);
 
   // ── Preload cache ──
   const preloadCacheRef = useRef<Map<string, PreloadItem>>(new Map());
   const preloadStartedRef = useRef(false);
   const preloadNameRef = useRef<string | null>(null);
+
+  // Mirror of preloadCacheRef for the current question — ref is async-populated,
+  // so we copy the relevant entry into state to keep render reactive.
+  const [preloadedForCurrent, setPreloadedForCurrent] = useState<PreloadItem | null>(null);
 
   function toggleMute() {
     setMuted((prev) => {
@@ -1118,9 +1064,7 @@ export function RespondentFlow({
   }, [muted]);
 
   const leftBg = TONE_BG[form.tone] ?? TONE_BG.playful;
-  const respondentNameError = respondentName ? validateRespondentName(respondentName) : "Tell us what to call you.";
-  const respondentNameValid = respondentNameError === null;
-  const hasStarted = stage !== "ENTRY" && stage !== "SETUP";
+  const hasStarted = stage !== "ENTRY";
   let shaderMode: PresenceShaderMode = "static";
   if (hasStarted) {
     if (stage === "QUESTION" || stage === "FOLLOWUP") {
@@ -1141,21 +1085,27 @@ export function RespondentFlow({
     activeName: string | null,
     onAssetDone: () => void
   ) {
-    const phraseRes = await fetch("/api/phrase-question", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        question_prompt: q.prompt,
-        tone: form.tone,
-        form_intent: form.intent,
-        session_id: activeSessionId,
-        respondent_name: activeName,
-        response_mode: "json",
-      }),
-    });
-
-    const { phrased } = (await phraseRes.json()) as { phrased?: string };
-    const text = phrased || q.prompt;
+    // Name questions don't need phrase-rephrasing; the constant is already on hand.
+    let text: string;
+    if (q.input_type === "name") {
+      text = NAME_QUESTION_PROMPT;
+    } else {
+      const phraseRes = await fetch("/api/phrase-question", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question_prompt: q.prompt,
+          tone: form.tone,
+          form_intent: form.intent,
+          session_id: activeSessionId,
+          respondent_name: activeName,
+          response_mode: "json",
+          input_type: q.input_type,
+        }),
+      });
+      const { phrased } = (await phraseRes.json()) as { phrased?: string };
+      text = phrased || q.prompt;
+    }
     if (preloadNameRef.current !== activeName) return;
     onAssetDone();
 
@@ -1189,15 +1139,26 @@ export function RespondentFlow({
     setPreloadProgress(0);
     setPreloadError(false);
 
+    // Skip the name question (constant phrasing, no value to preload). Pre-load
+    // every other question, including Q1 in anonymous mode so its TTS audio is
+    // ready by the time the audio element starts playing — otherwise the
+    // sequential phrase-fetch + tts-fetch round trip can exceed the browser's
+    // user-gesture autoplay window and the audio gets silently blocked.
+    const targets = questions.filter((q) => q.input_type !== "name");
+    if (targets.length === 0) {
+      setPreloadProgress(1);
+      return;
+    }
+
     let completed = 0;
-    const total = questions.length * 2;
+    const total = targets.length * 2;
     const markDone = () => {
       completed += 1;
       setPreloadProgress(Math.min(1, completed / total));
     };
 
     const results = await Promise.allSettled(
-      questions.map((q) => preloadQuestion(q, activeSessionId, activeName, markDone))
+      targets.map((q) => preloadQuestion(q, activeSessionId, activeName, markDone))
     );
 
     if (results.some((r) => r.status === "rejected")) {
@@ -1214,60 +1175,36 @@ export function RespondentFlow({
     };
   }, []);
 
+  // Sync the preload cache entry for the current question into state.
+  // preloadProgress changes whenever the cache is written, so this stays current.
   useEffect(() => {
-    if (stage !== "SETUP") return;
-
-    setSetupMinElapsed(false);
-    setSetupSubmitted(false);
-    const minTimer = setTimeout(() => setSetupMinElapsed(true), 3000);
-
-    return () => {
-      clearTimeout(minTimer);
-    };
-  }, [stage]);
-
-  useEffect(() => {
-    if (stage !== "SETUP" || !sessionId) return;
-    void preloadAll(sessionId, null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, sessionId]);
-
-  useEffect(() => {
-    if (
-      stage !== "SETUP" ||
-      !setupSubmitted ||
-      !setupMinElapsed ||
-      (preloadProgress < 1 && !preloadError)
-    ) {
+    const q = questions[questionIndex];
+    if (!q) {
+      setPreloadedForCurrent(null);
       return;
     }
-    setAvatarMode("thinking");
-    setStage("QUESTION");
-  }, [stage, setupSubmitted, setupMinElapsed, preloadProgress, preloadError]);
+    setPreloadedForCurrent(preloadCacheRef.current.get(q.id) ?? null);
+  }, [questionIndex, preloadProgress, questions]);
 
-  async function handleSetupContinue() {
-    if (!sessionId || !respondentNameValid) return;
-    const name = normalizeRespondentName(respondentName);
-    setSetupSubmitted(true);
-    try {
-      const res = await fetch("/api/sessions", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: sessionId,
-          respondent_name: name,
-        }),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { respondent_name?: string | null };
-        setRespondentNameSaved(data.respondent_name ?? name);
-      } else {
-        setRespondentNameSaved(name);
-      }
-    } catch {
-      setRespondentNameSaved(name);
-    }
-  }
+  // Kick off background pre-load of Q2..Qn when QUESTION stage first mounts.
+  // Runs once (preloadAll guards against double-runs via preloadStartedRef).
+  useEffect(() => {
+    if (stage !== "QUESTION" || !sessionId || questionIndex !== 0) return;
+    void preloadAll(sessionId, null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, sessionId, questionIndex]);
+
+  // If preload lands for the current question before QuestionStage's live
+  // fetch fires queueForTtsThenType, hand the cached blob URL to TTSPlayer
+  // directly. This narrows the gesture-to-play window for anonymous Q1, where
+  // the sequential phrase-fetch + tts-fetch path can otherwise exceed Chrome's
+  // user-gesture autoplay tolerance.
+  useEffect(() => {
+    if (stage !== "QUESTION" || !preloadedForCurrent) return;
+    if (phrasedForTTS) return;
+    setPhrasedForTTS(preloadedForCurrent.phrased);
+    setPreloadedAudioUrlForTTS(preloadedForCurrent.audioUrl);
+  }, [stage, preloadedForCurrent, phrasedForTTS]);
 
   // Preload next question phrasing during reflection
   const preloadNextQuestion = useCallback(() => {
@@ -1297,6 +1234,19 @@ export function RespondentFlow({
   async function handleStart() {
     playTick();
     setMusicActive(true);
+
+    // Request mic permission early so the first voice question doesn't surprise
+    // the user with a permission prompt mid-flow. Denial is non-blocking — voice
+    // inputs already fall back to "tap to type instead".
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      } catch {
+        // User denied or device unavailable — continue regardless.
+      }
+    }
+
     try {
       const res = await fetch("/api/sessions", {
         method: "POST",
@@ -1306,16 +1256,12 @@ export function RespondentFlow({
       if (res.ok) {
         const { id } = await res.json();
         setSessionId(id);
-        setAvatarMode("idle");
-        setStage("SETUP");
-        return;
       }
     } catch {
       // Don't block the flow — session is best-effort for demo
     }
-    setPreloadError(true);
-    setAvatarMode("idle");
-    setStage("SETUP");
+    setAvatarMode("thinking");
+    setStage("QUESTION");
   }
 
   function advanceQuestion() {
@@ -1347,6 +1293,35 @@ export function RespondentFlow({
 
   async function handleAnswer(rawValue: unknown, transcript?: string) {
     const currentQuestion = questions[questionIndex];
+
+    // Name question: capture locally, fire the answers POST (which mirrors to
+    // sessions.respondent_name), then advance. No reflection, no follow-up.
+    if (currentQuestion?.input_type === "name") {
+      const value =
+        typeof (rawValue as { value?: unknown })?.value === "string"
+          ? ((rawValue as { value: string }).value).trim()
+          : "";
+      if (value) setRespondentNameSaved(value);
+      if (sessionId && currentQuestion) {
+        try {
+          await fetch("/api/answers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: sessionId,
+              question_id: currentQuestion.id,
+              raw_value: rawValue,
+              transcript: null,
+            }),
+          });
+        } catch {
+          // Best-effort — name persistence is not blocking.
+        }
+      }
+      advanceQuestion();
+      return;
+    }
+
     let reflection: ReflectionResult | null = null;
 
     if (sessionId && currentQuestion) {
@@ -1519,6 +1494,10 @@ export function RespondentFlow({
     <div className="relative h-screen overflow-hidden">
       <div className="fixed inset-0 z-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
       <PresenceShader mode={shaderMode} className="fixed inset-0 z-0" />
+      {/* Cover the blue shader on the complete screen */}
+      {stage === "COMPLETE" && (
+        <div className="fixed inset-0 z-[1]" style={{ background: "#2e1f27" }} />
+      )}
       {/* ── Mute toggle — fixed overlay, always accessible ── */}
       <button
         onClick={toggleMute}
@@ -1599,19 +1578,6 @@ export function RespondentFlow({
             </motion.div>
           )}
 
-          {stage === "SETUP" && (
-            <motion.div key="setup" {...fadeUp} className="w-full h-full">
-              <SetupScreen
-                canContinue={respondentNameValid && !setupSubmitted}
-                isLoading={setupSubmitted}
-                name={respondentName}
-                nameError={respondentName ? respondentNameError : null}
-                onNameChange={setRespondentName}
-                onContinue={handleSetupContinue}
-              />
-            </motion.div>
-          )}
-
           {stage === "QUESTION" && questions[questionIndex] && (
             <motion.div
               key={`question-${questionIndex}`}
@@ -1629,7 +1595,7 @@ export function RespondentFlow({
                 onPhrasedReady={handlePhrasedReady}
                 ttsDisplayText={ttsDisplayText}
                 ttsDone={ttsDone}
-                preloaded={preloadCacheRef.current.get(questions[questionIndex].id) ?? null}
+                preloaded={preloadedForCurrent}
                 respondentName={respondentNameSaved}
                 splitLayout
               />
@@ -1679,21 +1645,8 @@ export function RespondentFlow({
           )}
 
           {stage === "COMPLETE" && (
-            <motion.div key="complete" {...fadeUp} className="w-full h-full">
-              <div className="flex h-full w-full -translate-y-6 flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8">
-                <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
-                  <div>
-                    <h1 className="font-display mt-4 max-w-2xl text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]">
-                      Your Pulse is ready.
-                    </h1>
-                  </div>
-                </div>
-                <div className="flex w-full items-center justify-center md:w-[45%]">
-                  <div className="h-full w-full max-w-2xl overflow-hidden rounded-3xl bg-white text-black shadow-2xl">
-                    <CompleteStage form={form} sessionId={sessionId} />
-                  </div>
-                </div>
-              </div>
+            <motion.div key="complete" {...fadeUp} className="flex h-full w-full items-center justify-center">
+              <CompleteStage form={form} sessionId={sessionId} />
             </motion.div>
           )}
         </AnimatePresence>

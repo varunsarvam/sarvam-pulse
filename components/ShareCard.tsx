@@ -95,9 +95,7 @@ export function ShareCard({ identity, tone, respondentName }: ShareCardProps) {
       {/* Middle: identity */}
       <div className="relative z-10 flex flex-col gap-3">
         <p className="text-xs font-medium tracking-[0.18em] uppercase text-white/70">
-          {respondentName
-            ? `${respondentName} took Pulse and discovered they're a`
-            : "I am a"}
+          {respondentName ? `${respondentName} is` : "I am"}
         </p>
         <h2 className="text-3xl font-bold leading-[1.1] tracking-tight text-white drop-shadow-sm">
           {identity.label}
@@ -110,10 +108,10 @@ export function ShareCard({ identity, tone, respondentName }: ShareCardProps) {
       {/* Bottom: footer */}
       <div className="relative z-10 flex items-end justify-between">
         <p className="text-[10px] tracking-wider uppercase text-white/60 max-w-[180px] leading-tight">
-          A voice-first conversational form
+          Sarvam Pulse
         </p>
         <div className="text-[10px] font-mono text-white/70">
-          pulse.app
+          pulse.sarvam.ai
         </div>
       </div>
     </div>

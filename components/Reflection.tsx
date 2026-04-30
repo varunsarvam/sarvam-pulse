@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
+import Lottie from "lottie-react";
 import { ReflectionDistribution } from "@/components/reflection/ReflectionDistribution";
 import { ReflectionSlider } from "@/components/reflection/ReflectionSlider";
 import { ReflectionTribe } from "@/components/reflection/ReflectionTribe";
@@ -27,12 +28,16 @@ interface ReflectionProps {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const REACTIONS = [
-  { key: "love",      emoji: "❤️" },
-  { key: "fire",      emoji: "🔥" },
-  { key: "hundred",   emoji: "💯" },
-  { key: "thumbsup",  emoji: "👍" },
-  { key: "mindblown", emoji: "🤯" },
+  { key: "love",      emoji: "❤️", hex: "2764_fe0f" },
+  { key: "fire",      emoji: "🔥", hex: "1f525"     },
+  { key: "hundred",   emoji: "💯", hex: "1f4af"     },
+  { key: "thumbsup",  emoji: "👍", hex: "1f44d"     },
+  { key: "mindblown", emoji: "🤯", hex: "1f92f"     },
 ] as const;
+
+function notoUrl(hex: string) {
+  return `https://fonts.gstatic.com/s/e/notoemoji/latest/${hex}/lottie.json`;
+}
 
 const CONTINUE_READY_MS = 5000;
 const AUTO_ADVANCE_MS = 9000;
@@ -315,64 +320,82 @@ function EmotionWash({ payload }: { payload: Record<string, unknown> }) {
   );
 }
 
-// ── Sticker reaction button ───────────────────────────────────────────────────
+// ── Emoji pill bar ────────────────────────────────────────────────────────────
 
-const STICKER_ROTATIONS = [-7, 5, -4, 8, -3];
-
-function StickerButton({
-  emoji,
-  index,
+function EmojiBar({
   reacted,
   onReact,
-  isMe,
+  dark = false,
 }: {
-  emoji: string;
-  index: number;
   reacted: string | null;
-  onReact: () => void;
-  isMe: boolean;
+  onReact: (key: string) => void;
+  dark?: boolean;
 }) {
-  const baseRotate = STICKER_ROTATIONS[index % STICKER_ROTATIONS.length];
-  const isDimmed = reacted !== null && !isMe;
-
   return (
-    <motion.button
-      onClick={(e) => { e.stopPropagation(); onReact(); }}
-      disabled={reacted !== null}
-      initial={{ rotate: baseRotate }}
-      animate={{
-        rotate: isMe ? 0 : baseRotate,
-        scale: isDimmed ? 0.72 : 1,
-        opacity: isDimmed ? 0.22 : 1,
-      }}
-      whileHover={reacted === null ? { rotate: 0, scale: 1.32, y: -10 } : {}}
-      whileTap={reacted === null ? { scale: 0.88 } : {}}
-      transition={{ type: "spring", stiffness: 360, damping: 22 }}
-      className="cursor-pointer select-none disabled:cursor-default"
+    <motion.div
+      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay: 0.5, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      className="w-fit self-start"
     >
-      {/* White sticker backing — shadow + ring on the shape, not the emoji */}
       <div
-        style={{
-          width: 58,
-          height: 58,
-          borderRadius: 18,
-          background: "#ffffff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "2rem",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.10), 0 0 0 1.5px rgba(0,0,0,0.07)",
-        }}
+        className="flex items-center gap-0.5 rounded-full p-1"
+        style={
+          dark
+            ? {
+                background: "rgba(255,255,255,0.10)",
+                backdropFilter: "blur(24px) saturate(1.6)",
+                WebkitBackdropFilter: "blur(24px) saturate(1.6)",
+                border: "1px solid rgba(255,255,255,0.20)",
+                boxShadow:
+                  "0 4px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(0,0,0,0.08)",
+              }
+            : {
+                background: "rgba(255,255,255,0.72)",
+                backdropFilter: "blur(20px) saturate(1.8)",
+                WebkitBackdropFilter: "blur(20px) saturate(1.8)",
+                border: "1px solid rgba(0,0,0,0.08)",
+                boxShadow:
+                  "0 2px 20px rgba(0,0,0,0.09), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.04)",
+              }
+        }
       >
-        <motion.span
-          animate={isMe ? { scale: [1, 1.6, 1.1, 1.28], y: [0, -18, 3, -4] } : {}}
-          transition={isMe ? { duration: 0.48, ease: "easeOut" } : undefined}
-          style={{ display: "inline-block" }}
-        >
-          {emoji}
-        </motion.span>
+        {REACTIONS.map(({ key, emoji, hex }) => {
+          const isMe = reacted === key;
+          const isDimmed = reacted !== null && !isMe;
+
+          return (
+            <motion.button
+              key={key}
+              onClick={(e) => { e.stopPropagation(); if (!reacted) onReact(key); }}
+              disabled={reacted !== null}
+              animate={{
+                scale: isDimmed ? 0.72 : 1,
+                opacity: isDimmed ? 0.22 : 1,
+              }}
+              whileHover={!reacted ? { scale: 1.28, y: -5 } : {}}
+              whileTap={!reacted ? { scale: 0.88 } : {}}
+              transition={{ type: "spring", stiffness: 420, damping: 22 }}
+              className="relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-full disabled:cursor-default"
+              style={{
+                background: isMe
+                  ? dark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.08)"
+                  : "transparent",
+              }}
+              title={emoji}
+            >
+              <Lottie
+                // @ts-expect-error — path prop works at runtime; not in older type defs
+                path={notoUrl(hex)}
+                loop
+                autoplay
+                style={{ width: 28, height: 28, pointerEvents: "none" }}
+              />
+            </motion.button>
+          );
+        })}
       </div>
-    </motion.button>
+    </motion.div>
   );
 }
 
@@ -471,23 +494,27 @@ export function Reflection({
   const quotes = Array.isArray(payload.quotes)
     ? payload.quotes.filter((q): q is string => typeof q === "string")
     : [];
+
+  // True if a distribution payload contains at least one positive count
+  function hasNonZeroDistribution(value: unknown): boolean {
+    if (!value || typeof value !== "object") return false;
+    return Object.values(value as Record<string, unknown>).some(
+      (v) => typeof v === "number" && v > 0
+    );
+  }
+
   const useTribeLayout = type === "tribe" && quotes.length > 0;
   const useSliderLayout =
     type === "comparison" &&
     questionInputType === "emoji_slider" &&
-    typeof payload.distribution === "object" &&
-    payload.distribution !== null;
+    hasNonZeroDistribution(payload.distribution);
   const useDistributionLayout =
     (type === "majority" || type === "minority") &&
     (questionInputType === "cards" || questionInputType === "this_or_that") &&
-    typeof payload.distribution === "object" &&
-    payload.distribution !== null;
+    hasNonZeroDistribution(payload.distribution);
 
-  // For cards questions with no distribution data, nothing meaningful to show — skip
-  if (questionInputType === "cards" && !useDistributionLayout && !useTribeLayout) {
-    advance();
-    return null;
-  }
+  // No special visual to fill the right-side card — render copy alone
+  const noRightVisual = !useTribeLayout && !useSliderLayout && !useDistributionLayout;
 
   const splitVisual = useTribeLayout ? (
     <ReflectionTribe copy={copy} quotes={quotes} hideHeadline />
@@ -510,6 +537,53 @@ export function Reflection({
   );
 
   if (splitLayout) {
+    // No meaningful visual → render copy alone, full-width, centered. Drop the white card.
+    if (noRightVisual) {
+      return (
+        <div
+          className="flex min-h-screen w-full items-center justify-center p-5 md:p-8"
+          role={showContinue ? "button" : undefined}
+          tabIndex={showContinue ? 0 : undefined}
+          onClick={handleCardClick}
+          onKeyDown={handleCardKeyDown}
+        >
+          <div className="flex w-full max-w-3xl flex-col items-center gap-7 px-6 text-center md:px-12">
+            <motion.h1
+              className="font-display text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: "easeOut" }}
+            >
+              {copy}
+            </motion.h1>
+            <EmojiBar reacted={reacted} onReact={handleReaction} dark />
+
+            {showContinue && (
+              <motion.button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleContinue();
+                }}
+                className="text-sm text-white/60 transition-colors hover:text-white"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: [0.6, 1, 0.6], y: 0 }}
+                transition={{ opacity: { duration: 2, repeat: Infinity }, y: { duration: 0.2 } }}
+              >
+                Continue →
+              </motion.button>
+            )}
+
+            {reflection.source && (
+              <p className="fixed bottom-3 right-4 text-xs uppercase text-white/40">
+                {reflection.source === "llm" ? "{llm}" : "{fallback}"}
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div
         className="flex min-h-screen w-full -translate-y-6 flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8"
@@ -518,7 +592,7 @@ export function Reflection({
         onClick={handleCardClick}
         onKeyDown={handleCardKeyDown}
       >
-        <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
+        <div className="flex w-full flex-col justify-center gap-7 px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
           <motion.h1
             className="font-display max-w-2xl text-left text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
             initial={{ opacity: 0, y: 10 }}
@@ -527,6 +601,9 @@ export function Reflection({
           >
             {copy}
           </motion.h1>
+          {!useSliderLayout && (
+            <EmojiBar reacted={reacted} onReact={handleReaction} dark />
+          )}
         </div>
         <div className="flex w-full items-center justify-center md:w-[45%]">
           <div className="relative flex w-full max-w-2xl flex-col items-center justify-center gap-8 rounded-3xl bg-white p-9 text-black shadow-2xl md:p-14">
@@ -608,6 +685,10 @@ export function Reflection({
               {copy}
             </motion.p>
           </>
+        )}
+
+        {!useSliderLayout && (
+          <EmojiBar reacted={reacted} onReact={handleReaction} />
         )}
 
         {reflection.source && (

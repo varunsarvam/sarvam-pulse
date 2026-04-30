@@ -6,54 +6,15 @@ import {
   pickReflectionWithDebug,
   type ReflectionType,
 } from "@/lib/reflection";
+import {
+  cloneAggregation,
+  computeAggregationUpdate,
+  defaultAggregation,
+  extractAnswerText,
+} from "@/lib/aggregation";
 import type { InputType, Aggregation, Cluster } from "@/lib/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function sliderBucket(val: number): string {
-  const start = val >= 100 ? 80 : Math.floor(val / 20) * 20;
-  return `${start}-${start + 20}`;
-}
-
-function extractAnswerText(
-  rawValue: Record<string, unknown>,
-  transcript: string | null
-): string {
-  if (transcript?.trim()) return transcript.trim();
-  const value = rawValue.value;
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number") return String(value);
-  if (Array.isArray(value)) return value.join(" → ");
-  return "";
-}
-
-function defaultAggregation(questionId: string): Aggregation {
-  return {
-    question_id: questionId,
-    total_responses: 0,
-    distribution: {},
-    sentiment_avg: 0,
-    recent_quotes: [],
-    clusters: [],
-    updated_at: new Date().toISOString(),
-  };
-}
-
-function cloneAggregation(agg: Aggregation): Aggregation {
-  return {
-    question_id: agg.question_id,
-    total_responses: agg.total_responses,
-    distribution: { ...agg.distribution },
-    sentiment_avg: agg.sentiment_avg,
-    recent_quotes: [...agg.recent_quotes],
-    clusters: agg.clusters.map((c) => ({
-      label: c.label,
-      count: c.count,
-      examples: [...c.examples],
-    })),
-    updated_at: agg.updated_at,
-  };
-}
 
 function parseReflectionHistory(value: unknown): ReflectionType[] {
   const valid = new Set<ReflectionType>([
@@ -148,6 +109,43 @@ export async function POST(req: NextRequest) {
       form_id: string;
     };
     const inputType = question.input_type;
+
+    // ── Name questions short-circuit: mirror to sessions.respondent_name and
+    //    skip aggregation/normalize/reflection. Phase 1 spec: aggregations and
+    //    reflections skip name questions.
+    if (inputType === "name") {
+      const nameValue =
+        typeof raw_value.value === "string" ? raw_value.value.trim() : "";
+      const writes: PromiseLike<unknown>[] = [
+        supabase
+          .from("questions")
+          .select("id")
+          .eq("form_id", question.form_id)
+          .gt("position", question.position)
+          .order("position", { ascending: true })
+          .limit(1)
+          .maybeSingle(),
+      ];
+      if (nameValue) {
+        writes.push(
+          supabase
+            .from("sessions")
+            .update({ respondent_name: nameValue })
+            .eq("id", session_id)
+        );
+      }
+      const [nextQRes] = (await Promise.all(writes)) as [
+        { data: { id: string } | null },
+        ...unknown[],
+      ];
+      return NextResponse.json({
+        reflection: null,
+        null_reason: null,
+        debug_info: null,
+        next_question_id: nextQRes?.data?.id ?? null,
+      });
+    }
+
     const isOpenEnded = inputType === "voice" || inputType === "text";
     const reflectionHistory = parseReflectionHistory(reflection_history);
     const respondentName =
@@ -174,97 +172,31 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Phase 3: compute updated aggregation ──────────────────────────────────
+    // The reflection engine in Phase 5 below needs the PRE-mutation snapshot
+    // so the current respondent doesn't see their own answer reflected back at
+    // them. Sequencing stays here; the actual update math lives in
+    // `lib/aggregation.ts`.
 
-    const existingAgg: Aggregation = aggRes.data
+    const existingAgg: Aggregation | null = aggRes.data
       ? (aggRes.data as Aggregation)
+      : null;
+    const preMutationAgg = existingAgg
+      ? cloneAggregation(existingAgg)
       : defaultAggregation(question_id);
-    const preMutationAgg = cloneAggregation(existingAgg);
-    const agg = cloneAggregation(existingAgg);
 
-    const oldTotal = agg.total_responses;
-    agg.total_responses = oldTotal + 1;
-    const newTotal = agg.total_responses;
-
-    switch (inputType) {
-      case "cards":
-      case "this_or_that":
-      case "visual_select": {
-        const chosen = raw_value.value as string;
-        agg.distribution[chosen] = (agg.distribution[chosen] ?? 0) + 1;
-        break;
-      }
-
-      case "emoji_slider": {
-        const bucket = sliderBucket(raw_value.value as number);
-        agg.distribution[bucket] = (agg.distribution[bucket] ?? 0) + 1;
-        break;
-      }
-
-      case "ranking": {
-        const ranked = raw_value.value as string[];
-        for (let i = 0; i < ranked.length; i++) {
-          const option = ranked[i];
-          const position = i + 1;
-          const oldAvg = agg.distribution[option] ?? position;
-          agg.distribution[option] =
-            (oldAvg * oldTotal + position) / newTotal;
-        }
-        break;
-      }
-
-      case "voice":
-      case "text": {
-        if (normalizeResult) {
-          if (normalizeResult.is_new) {
-            agg.clusters.push({
-              label: normalizeResult.cluster,
-              count: 1,
-              examples: [
-                extractAnswerText(raw_value, transcript ?? null).slice(0, 120),
-              ],
-            });
-          } else {
-            const match = agg.clusters.find(
-              (c) => c.label === normalizeResult.cluster
-            );
-            if (match) {
-              match.count += 1;
-              if (match.examples.length < 5) {
-                match.examples.push(
-                  extractAnswerText(raw_value, transcript ?? null).slice(0, 120)
-                );
-              }
-            } else {
-              agg.clusters.push({
-                label: normalizeResult.cluster,
-                count: 1,
-                examples: [
-                  extractAnswerText(raw_value, transcript ?? null).slice(
-                    0,
-                    120
-                  ),
-                ],
-              });
-            }
+    const agg = computeAggregationUpdate(existingAgg, question_id, {
+      input_type: inputType,
+      raw_value,
+      transcript: transcript ?? null,
+      normalized: normalizeResult
+        ? {
+            cluster: normalizeResult.cluster,
+            is_new: normalizeResult.is_new,
+            confidence: normalizeResult.confidence,
           }
-        }
-        break;
-      }
-    }
-
-    // Sentiment rolling average (only when we have a sentiment score)
-    if (normalizeResult) {
-      agg.sentiment_avg =
-        (agg.sentiment_avg * oldTotal + normalizeResult.sentiment) / newTotal;
-    }
-
-    // Recent quotes — prepend, keep 10, skip if nothing quotable
-    const quote = extractAnswerText(raw_value, transcript ?? null).slice(0, 80);
-    if (quote) {
-      agg.recent_quotes = [quote, ...agg.recent_quotes].slice(0, 10);
-    }
-
-    agg.updated_at = new Date().toISOString();
+        : null,
+      sentiment: normalizeResult?.sentiment ?? null,
+    });
 
     // ── Phase 4: persist aggregation + answer update + next question (parallel)
 

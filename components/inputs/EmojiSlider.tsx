@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Lottie from "lottie-react";
 import type { Question } from "@/lib/types";
@@ -26,20 +26,36 @@ function notoUrl(hex: string) {
   return `https://fonts.gstatic.com/s/e/notoemoji/latest/${hex}/lottie.json`;
 }
 
+function useLottieData(url: string) {
+  const [data, setData] = useState<object | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url)
+      .then((r) => r.json())
+      .then((json) => { if (!cancelled) setData(json); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [url]);
+  return data;
+}
+
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
 function EmojiCard({
   step,
+  label,
   selected,
   disabled,
   onClick,
 }: {
   step: typeof STEPS[number];
+  label: string;
   selected: boolean;
   disabled: boolean;
   onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const lottieData = useLottieData(notoUrl(step.hex));
 
   return (
     <div className="relative flex flex-col items-center">
@@ -53,7 +69,7 @@ function EmojiCard({
             exit={{ opacity: 0, y: 4, scale: 0.88 }}
             transition={{ duration: 0.14 }}
           >
-            {step.label}
+            {label}
             <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
           </motion.div>
         )}
@@ -74,12 +90,14 @@ function EmojiCard({
         transition={{ type: "spring", stiffness: 380, damping: 22 }}
         className="relative flex flex-col items-center justify-center gap-1.5 disabled:pointer-events-none"
       >
-        <Lottie
-          path={notoUrl(step.hex)}
-          style={{ width: 72, height: 72 }}
-          loop
-          autoplay
-        />
+        {lottieData && (
+          <Lottie
+            animationData={lottieData}
+            style={{ width: 72, height: 72 }}
+            loop
+            autoplay
+          />
+        )}
         {/* Label on selected */}
         <AnimatePresence>
           {selected && (
@@ -90,7 +108,7 @@ function EmojiCard({
               exit={{ opacity: 0, y: 4 }}
               transition={{ duration: 0.18 }}
             >
-              {step.label}
+              {label}
             </motion.span>
           )}
         </AnimatePresence>
@@ -105,7 +123,9 @@ export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSlide
   const [selected, setSelected] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  void question;
+  const opts = question.options as { min_label?: string; max_label?: string } | null;
+  const minLabel = opts?.min_label?.trim() || "Less";
+  const maxLabel = opts?.max_label?.trim() || "More";
 
   function handlePick(value: number) {
     if (disabled || submitted) return;
@@ -118,20 +138,29 @@ export function EmojiSlider({ question, onSubmit, disabled = false }: EmojiSlide
     onSubmit({ type: "emoji_slider", value: selected });
   }
 
+  const lastIdx = STEPS.length - 1;
+
   return (
     <div className="flex w-full flex-col gap-8 py-2">
 
-      {/* ── 3×2 grid ── */}
-      <div className="grid grid-cols-3 gap-x-0 gap-y-6">
-        {STEPS.map((s) => (
-          <EmojiCard
-            key={s.value}
-            step={s}
-            selected={selected === s.value}
-            disabled={disabled || submitted}
-            onClick={() => handlePick(s.value)}
-          />
-        ))}
+      {/* ── 3×2 grid + scale labels ── */}
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-3 gap-x-0 gap-y-6">
+          {STEPS.map((s, i) => (
+            <EmojiCard
+              key={s.value}
+              step={s}
+              label={i === 0 ? minLabel : i === lastIdx ? maxLabel : s.label}
+              selected={selected === s.value}
+              disabled={disabled || submitted}
+              onClick={() => handlePick(s.value)}
+            />
+          ))}
+        </div>
+        <div className="flex justify-between px-2 text-xs font-medium text-zinc-400">
+          <span>{minLabel}</span>
+          <span>{maxLabel}</span>
+        </div>
       </div>
 
       {/* ── Confirm ── */}

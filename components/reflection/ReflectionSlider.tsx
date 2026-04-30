@@ -1,7 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Lottie from "lottie-react";
+
+function useLottieData(url: string) {
+  const [data, setData] = useState<object | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url)
+      .then((r) => r.json())
+      .then((json) => { if (!cancelled) setData(json); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [url]);
+  return data;
+}
 
 // ── EmojiSlider step values → exact Noto hex codes ───────────────────────────
 // Must match EmojiSlider STEPS exactly so the big emoji reflects what was picked
@@ -130,6 +144,7 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
   const particles = makeParticles(distribution);
   const value = typeof payload.value === "number" ? payload.value : 50;
   const hex = resolveUserHex(value);
+  const lottieData = useLottieData(notoUrl(hex));
 
   return (
     <div
@@ -190,12 +205,14 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.3, duration: 0.55, type: "spring", bounce: 0.4 }}
       >
-        <Lottie
-          path={notoUrl(hex)}
-          style={{ width: 130, height: 130 }}
-          loop
-          autoplay
-        />
+        {lottieData && (
+          <Lottie
+            animationData={lottieData}
+            style={{ width: 130, height: 130 }}
+            loop
+            autoplay
+          />
+        )}
       </motion.div>
     </div>
   );

@@ -18,7 +18,6 @@ import {
 } from "@dnd-kit/sortable";
 import { KeyboardSensor } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Button } from "@/components/ui/button";
 import { GripVertical } from "lucide-react";
 import type { Question } from "@/lib/types";
 
@@ -75,7 +74,8 @@ function SortableItem({
 
       {/* Drag handle */}
       <button
-        className="cursor-grab touch-none text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing focus:outline-none disabled:cursor-not-allowed"
+        className="cursor-grab touch-none active:cursor-grabbing focus:outline-none disabled:cursor-not-allowed"
+        style={{ color: "#F15A22" }}
         disabled={disabled}
         {...attributes}
         {...(disabled ? {} : listeners)}
