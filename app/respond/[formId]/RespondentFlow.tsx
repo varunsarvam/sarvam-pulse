@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
@@ -1001,16 +1001,25 @@ export function RespondentFlow({
       next = { id: `R-${qid}`, text: reflectionData.copy, audioUrl: null };
     }
 
-    setNarration((prev) => {
-      // No-op if same id — keeps TTSPlayer mounted, audio uninterrupted.
-      if (prev?.id === next?.id) return prev;
-      // Reset display state on transition. The new TTSPlayer's onDisplayedTextChange("",false) will keep it empty until typewriter ticks.
-      setNarrationDisplayText("");
-      setNarrationDone(false);
-      setShowFallbackCopy(false);
-      return next;
-    });
+    // Pure updater: returns prev when ids match (TTSPlayer stays mounted) and
+    // returns next otherwise. Display-state reset is handled by the
+    // useLayoutEffect below — keeping the updater pure avoids React 18's
+    // double-invocation in Strict Mode firing the inner setStates twice and
+    // racing against typewriter ticks.
+    setNarration((prev) => (prev?.id === next?.id ? prev : next));
   }, [stage, questionIndex, questions, followUpPrompt, reflectionData, preloadProgress]);
+
+  // Reset display state SYNCHRONOUSLY before the browser paints whenever the
+  // narration id changes. useLayoutEffect (not useEffect) so the reset commits
+  // in the same paint as the new narration object — there's no intermediate
+  // frame where the new TTSPlayer is mounted but `narrationDisplayText` still
+  // holds the previous narration's full text. That intermediate frame was the
+  // visible "text goes back" flicker.
+  useLayoutEffect(() => {
+    setNarrationDisplayText("");
+    setNarrationDone(false);
+    setShowFallbackCopy(false);
+  }, [narration?.id]);
 
   // Slow-TTS fallback: if the typewriter hasn't started ticking within 3 s of
   // a new narration, surface the full copy + unblock UI. Single timer keyed
