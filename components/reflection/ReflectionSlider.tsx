@@ -1,16 +1,30 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Lottie from "lottie-react";
 
 const BUCKETS = ["0-20", "20-40", "40-60", "60-80", "80-100"] as const;
 
 const BUCKET_EMOJI: Record<(typeof BUCKETS)[number], string> = {
-  "0-20": "😞",
-  "20-40": "😕",
-  "40-60": "😐",
-  "60-80": "🙂",
+  "0-20":   "😞",
+  "20-40":  "😕",
+  "40-60":  "😐",
+  "60-80":  "🙂",
   "80-100": "😄",
 };
+
+// Noto animated emoji hex codes matching each bucket
+const BUCKET_HEX: Record<(typeof BUCKETS)[number], string> = {
+  "0-20":   "1f61e",
+  "20-40":  "1f615",
+  "40-60":  "1f610",
+  "60-80":  "1f642",
+  "80-100": "1f604",
+};
+
+function notoUrl(hex: string) {
+  return `https://fonts.gstatic.com/s/e/notoemoji/latest/${hex}/lottie.json`;
+}
 
 interface ReflectionSliderProps {
   copy: string;
@@ -48,9 +62,9 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
-function userEmoji(value: number): string {
-  const bucket = value >= 100 ? "80-100" : `${Math.floor(value / 20) * 20}-${Math.floor(value / 20) * 20 + 20}`;
-  return BUCKET_EMOJI[bucket as keyof typeof BUCKET_EMOJI] ?? "😐";
+function userBucket(value: number): (typeof BUCKETS)[number] {
+  const key = value >= 100 ? "80-100" : `${Math.floor(value / 20) * 20}-${Math.floor(value / 20) * 20 + 20}`;
+  return (BUCKET_HEX[key as keyof typeof BUCKET_HEX] ? key : "40-60") as (typeof BUCKETS)[number];
 }
 
 function makeParticles(distribution: Record<string, number>): Particle[] {
@@ -70,19 +84,14 @@ function makeParticles(distribution: Record<string, number>): Particle[] {
 
   let assigned = counts.reduce((sum, item) => sum + item.count, 0);
   for (const item of counts.filter((c) => (distribution[c.bucket] ?? 0) > 0)) {
-    if (item.count === 0 && assigned < target) {
-      item.count = 1;
-      assigned++;
-    }
+    if (item.count === 0 && assigned < target) { item.count = 1; assigned++; }
   }
-
   while (assigned < target) {
     const next = counts
       .filter((item) => (distribution[item.bucket] ?? 0) > 0)
       .sort((a, b) => b.remainder - a.remainder)[assigned % counts.length];
     if (!next) break;
-    next.count++;
-    assigned++;
+    next.count++; assigned++;
   }
 
   const particles: Particle[] = [];
@@ -93,15 +102,14 @@ function makeParticles(distribution: Record<string, number>): Particle[] {
         id: `${item.bucket}-${i}`,
         emoji: BUCKET_EMOJI[item.bucket],
         x: 4 + seeded(idx + 1) * 92,
-        delay: seeded(idx + 20) * 1,
-        duration: 3 + seeded(idx + 40) * 1,
-        size: 18 + seeded(idx + 60) * 12,
-        sway: -18 + seeded(idx + 80) * 36,
+        delay: seeded(idx + 20) * 1.2,
+        duration: 2.8 + seeded(idx + 40) * 1.4,
+        size: 22 + seeded(idx + 60) * 14,
+        sway: -22 + seeded(idx + 80) * 44,
       });
       idx++;
     }
   }
-
   return particles.slice(0, 40);
 }
 
@@ -109,13 +117,16 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
   const distribution = asDistribution(payload.distribution);
   const particles = makeParticles(distribution);
   const value = typeof payload.value === "number" ? payload.value : 50;
-  const userBottom = `${clamp(12 + value * 0.7, 12, 82)}%`;
+  const bucket = userBucket(value);
+  const hex = BUCKET_HEX[bucket];
 
   return (
-    <div className="relative min-h-[460px] w-full overflow-hidden">
+    // overflow-hidden clips particles: enter from bottom edge, exit through top edge
+    <div className="relative w-full overflow-hidden" style={{ minHeight: 380 }}>
+
       {!hideHeadline && (
         <motion.h2
-          className="absolute left-1/2 top-[28%] z-20 max-w-md -translate-x-1/2 text-center text-2xl font-semibold leading-snug tracking-tight"
+          className="absolute left-1/2 top-[18%] z-20 max-w-md -translate-x-1/2 text-center text-2xl font-semibold leading-snug tracking-tight"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
@@ -124,28 +135,31 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
         </motion.h2>
       )}
 
+      {/* Rising emoji particles — start at card bottom, exit card top */}
       <div className="pointer-events-none absolute inset-0 z-0">
         {particles.map((particle) => (
           <motion.span
             key={particle.id}
-            className="absolute bottom-[-12%] select-none"
+            className="absolute select-none"
             style={{
               left: `${particle.x}%`,
+              bottom: 0,
               fontSize: particle.size,
-              filter: "saturate(0.85)",
             }}
-            initial={{ opacity: 0, y: 0, x: 0, scale: 0.85 }}
+            initial={{ opacity: 0, y: 0, x: 0, scale: 0.8 }}
             animate={{
-              opacity: [0, 0.72, 0.55, 0],
+              opacity: [0, 0.85, 0.65, 0],
               y: -520,
               x: [0, particle.sway, 0],
-              scale: [0.85, 1, 0.94],
+              scale: [0.8, 1.05, 0.9],
             }}
             transition={{
               delay: particle.delay,
               duration: particle.duration,
               ease: "easeOut",
-              times: [0, 0.2, 0.72, 1],
+              times: [0, 0.15, 0.7, 1],
+              repeat: Infinity,
+              repeatDelay: seeded(particles.indexOf(particle) + 99) * 1.5,
             }}
           >
             {particle.emoji}
@@ -153,16 +167,20 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
         ))}
       </div>
 
+      {/* Big animated Lottie emoji — user's answer position */}
       <motion.div
-        className="absolute left-1/2 z-10 -translate-x-1/2 select-none rounded-full bg-background/80 px-3 py-2 shadow-[0_0_30px_rgba(255,255,255,0.12)] backdrop-blur"
-        style={{ bottom: userBottom }}
-        initial={{ opacity: 0, scale: 0.7 }}
-        animate={{ opacity: 1, scale: 1.5 }}
-        transition={{ delay: 0.4, duration: 0.5, type: "spring", bounce: 0.35 }}
+        className="absolute left-1/2 z-10 -translate-x-1/2"
+        style={{ bottom: `${clamp(8 + value * 0.55, 8, 68)}%` }}
+        initial={{ opacity: 0, scale: 0.4 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.3, duration: 0.55, type: "spring", bounce: 0.4 }}
       >
-        <span className="text-4xl drop-shadow-[0_0_16px_rgba(255,255,255,0.4)]">
-          {userEmoji(value)}
-        </span>
+        <Lottie
+          path={notoUrl(hex)}
+          style={{ width: 130, height: 130 }}
+          loop
+          autoplay
+        />
       </motion.div>
     </div>
   );

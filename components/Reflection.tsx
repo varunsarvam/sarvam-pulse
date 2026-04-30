@@ -497,23 +497,25 @@ export function Reflection({
           <div className="relative flex w-full max-w-2xl flex-col items-center justify-center gap-8 rounded-3xl bg-white p-9 text-black shadow-2xl md:p-14">
             {splitVisual}
 
-            <motion.div
-              className="flex items-center gap-4"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.45, duration: 0.2 }}
-            >
-              {REACTIONS.map(({ key, emoji }, i) => (
-                <StickerButton
-                  key={key}
-                  emoji={emoji}
-                  index={i}
-                  reacted={reacted}
-                  onReact={() => { handleReaction(key); }}
-                  isMe={reacted === key}
-                />
-              ))}
-            </motion.div>
+            {questionInputType !== "emoji_slider" && (
+              <motion.div
+                className="flex items-center gap-4"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45, duration: 0.2 }}
+              >
+                {REACTIONS.map(({ key, emoji }, i) => (
+                  <StickerButton
+                    key={key}
+                    emoji={emoji}
+                    index={i}
+                    reacted={reacted}
+                    onReact={() => { handleReaction(key); }}
+                    isMe={reacted === key}
+                  />
+                ))}
+              </motion.div>
+            )}
 
             {showContinue && (
               <motion.button
@@ -600,7 +602,7 @@ export function Reflection({
         )}
 
         {/* Reaction emoji row */}
-        <motion.div
+        {questionInputType !== "emoji_slider" && <motion.div
           className="flex items-center gap-4"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -664,7 +666,7 @@ export function Reflection({
               </motion.span>
             </motion.button>
           ))}
-        </motion.div>
+        </motion.div>}
 
         {showContinue && (
           <motion.button
