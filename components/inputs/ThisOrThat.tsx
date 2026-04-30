@@ -23,7 +23,7 @@ export function ThisOrThat({ question, options, onSubmit, disabled = false }: Th
   function pick(index: 0 | 1) {
     if (disabled || selected !== null) return;
     setSelected(index);
-    setTimeout(() => onSubmit({ type: "this_or_that", value: options[index] }), 320);
+    setTimeout(() => onSubmit({ type: "this_or_that", value: options[index] }), 80);
   }
 
   function cardState(index: 0 | 1): "selected" | "dismissed" | "hovered" | "idle" {

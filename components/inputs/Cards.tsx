@@ -20,7 +20,7 @@ export function Cards({ question, options, onSubmit, disabled = false }: CardsPr
   function pick(opt: string) {
     if (disabled || selected !== null) return;
     setSelected(opt);
-    setTimeout(() => onSubmit({ type: "cards", value: opt }), 400);
+    setTimeout(() => onSubmit({ type: "cards", value: opt }), 80);
   }
 
   return (

@@ -1101,31 +1101,24 @@ export function RespondentFlow({
       clearTimeout(nullReflectionTimerRef.current);
       nullReflectionTimerRef.current = null;
     }
-    // 500 ms visual hold before flipping stage. Reflection's TTS is already
-    // done (Continue is gated on narrationDone), so no audio is playing.
-    // The narration effect picks up the new stage/question and sets a fresh
-    // narration → TTSPlayer remounts atomically with the new key.
     if (stageTransitionTimerRef.current) {
       clearTimeout(stageTransitionTimerRef.current);
     }
-    stageTransitionTimerRef.current = setTimeout(() => {
-      stageTransitionTimerRef.current = null;
-      setReflectionData(null);
-      setNullReason(null);
-      setNullDebugInfo(null);
-      pendingReflectionRef.current = null;
-      pendingNullReasonRef.current = null;
-      pendingNullDebugInfoRef.current = null;
-      setIsSpeaking(false);
-      setAvatarMode("thinking");
-      if (questionIndex + 1 < questions.length) {
-        setQuestionIndex((i) => i + 1);
-        setStage("QUESTION");
-      } else {
-        setAvatarMode("idle");
-        setStage("COMPLETE");
-      }
-    }, 500);
+    setReflectionData(null);
+    setNullReason(null);
+    setNullDebugInfo(null);
+    pendingReflectionRef.current = null;
+    pendingNullReasonRef.current = null;
+    pendingNullDebugInfoRef.current = null;
+    setIsSpeaking(false);
+    setAvatarMode("thinking");
+    if (questionIndex + 1 < questions.length) {
+      setQuestionIndex((i) => i + 1);
+      setStage("QUESTION");
+    } else {
+      setAvatarMode("idle");
+      setStage("COMPLETE");
+    }
   }
 
   async function handleAnswer(rawValue: unknown, transcript?: string) {
@@ -1306,22 +1299,16 @@ export function RespondentFlow({
     setAvatarMode("idle");
     if (ref) playWhoosh();
     playTick();
-    // 500 ms visual hold; the narration effect picks up the new stage and
-    // swaps narrations atomically (single TTSPlayer, key change → audio
-    // pause + new fetch).
     if (stageTransitionTimerRef.current) {
       clearTimeout(stageTransitionTimerRef.current);
     }
-    stageTransitionTimerRef.current = setTimeout(() => {
-      stageTransitionTimerRef.current = null;
-      setReflectionData(ref);
-      setNullReason(ref ? null : reason ?? null);
-      setNullDebugInfo(ref ? null : debugInfo ?? null);
-      setStage("REFLECTION");
-      if (!ref) {
-        nullReflectionTimerRef.current = setTimeout(advanceQuestion, 2000);
-      }
-    }, 500);
+    setReflectionData(ref);
+    setNullReason(ref ? null : reason ?? null);
+    setNullDebugInfo(ref ? null : debugInfo ?? null);
+    setStage("REFLECTION");
+    if (!ref) {
+      nullReflectionTimerRef.current = setTimeout(advanceQuestion, 2000);
+    }
   }
 
   function handleSpeakingChange(speaking: boolean) {
