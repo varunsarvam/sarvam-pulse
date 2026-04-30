@@ -3,27 +3,42 @@
 import { motion } from "framer-motion";
 import Lottie from "lottie-react";
 
+// ── EmojiSlider step values → exact Noto hex codes ───────────────────────────
+// Must match EmojiSlider STEPS exactly so the big emoji reflects what was picked
+
+const VALUE_HEX: Record<number, string> = {
+  0:   "1f621", // 😡 Strongly disagree
+  20:  "1f61e", // 😞 Disagree
+  40:  "1f615", // 😕 Not sure
+  60:  "1f642", // 🙂 Agree
+  80:  "1f60a", // 😊 Strongly agree
+  100: "1f929", // 🤩 Absolutely!
+};
+
+// For the rising particles: distribution is stored as range buckets ("0-20" etc.)
+// Map each bucket to the emoji of its representative step value
 const BUCKETS = ["0-20", "20-40", "40-60", "60-80", "80-100"] as const;
 
 const BUCKET_EMOJI: Record<(typeof BUCKETS)[number], string> = {
-  "0-20":   "😞",
-  "20-40":  "😕",
-  "40-60":  "😐",
+  "0-20":   "😡",
+  "20-40":  "😞",
+  "40-60":  "😕",
   "60-80":  "🙂",
-  "80-100": "😄",
-};
-
-// Noto animated emoji hex codes matching each bucket
-const BUCKET_HEX: Record<(typeof BUCKETS)[number], string> = {
-  "0-20":   "1f61e",
-  "20-40":  "1f615",
-  "40-60":  "1f610",
-  "60-80":  "1f642",
-  "80-100": "1f604",
+  "80-100": "😊",
 };
 
 function notoUrl(hex: string) {
   return `https://fonts.gstatic.com/s/e/notoemoji/latest/${hex}/lottie.json`;
+}
+
+// Resolve the exact hex for the user's chosen value.
+// Snaps to the nearest valid step if value is somehow off-grid.
+function resolveUserHex(value: number): string {
+  if (VALUE_HEX[value]) return VALUE_HEX[value];
+  const nearest = [0, 20, 40, 60, 80, 100].reduce((a, b) =>
+    Math.abs(b - value) < Math.abs(a - value) ? b : a
+  );
+  return VALUE_HEX[nearest];
 }
 
 interface ReflectionSliderProps {
@@ -62,13 +77,10 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
-function userBucket(value: number): (typeof BUCKETS)[number] {
-  const key = value >= 100 ? "80-100" : `${Math.floor(value / 20) * 20}-${Math.floor(value / 20) * 20 + 20}`;
-  return (BUCKET_HEX[key as keyof typeof BUCKET_HEX] ? key : "40-60") as (typeof BUCKETS)[number];
-}
-
+// Build rising particles proportional to the population distribution.
+// Each bucket maps to its actual emoji so particles reflect how others answered.
 function makeParticles(distribution: Record<string, number>): Particle[] {
-  const total = BUCKETS.reduce((sum, bucket) => sum + (distribution[bucket] ?? 0), 0);
+  const total = BUCKETS.reduce((sum, b) => sum + (distribution[b] ?? 0), 0);
   if (total <= 0) return [];
 
   const target = clamp(total, 20, 40);
@@ -117,8 +129,7 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
   const distribution = asDistribution(payload.distribution);
   const particles = makeParticles(distribution);
   const value = typeof payload.value === "number" ? payload.value : 50;
-  const bucket = userBucket(value);
-  const hex = BUCKET_HEX[bucket];
+  const hex = resolveUserHex(value);
 
   return (
     <div
@@ -129,7 +140,6 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
         WebkitMaskImage: "linear-gradient(to top, black 0%, black 60%, transparent 100%)",
       }}
     >
-
       {!hideHeadline && (
         <motion.h2
           className="absolute left-1/2 top-[18%] z-20 max-w-md -translate-x-1/2 text-center text-2xl font-semibold leading-snug tracking-tight"
@@ -141,9 +151,9 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
         </motion.h2>
       )}
 
-      {/* Rising emoji particles — start at card bottom, exit card top */}
+      {/* Rising particles — emojis proportional to how the population answered */}
       <div className="pointer-events-none absolute inset-0 z-0">
-        {particles.map((particle) => (
+        {particles.map((particle, i) => (
           <motion.span
             key={particle.id}
             className="absolute select-none"
@@ -165,7 +175,7 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
               ease: "easeOut",
               times: [0, 0.15, 0.7, 1],
               repeat: Infinity,
-              repeatDelay: seeded(particles.indexOf(particle) + 99) * 1.5,
+              repeatDelay: seeded(i + 99) * 1.5,
             }}
           >
             {particle.emoji}
@@ -173,7 +183,7 @@ export function ReflectionSlider({ copy, payload, hideHeadline = false }: Reflec
         ))}
       </div>
 
-      {/* Big animated Lottie emoji — centered */}
+      {/* Big Lottie emoji — exactly the one the user picked */}
       <motion.div
         className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
         initial={{ opacity: 0, scale: 0.4 }}
