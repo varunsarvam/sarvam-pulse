@@ -21,9 +21,8 @@ const DOT_STEP = 16;
 const DOT_SIZE = 12;
 const COL_HEIGHT = MAX_ROWS * DOT_STEP + DOT_SIZE * 2 + 16;
 
-// Terracotta orange matching reference image
-const ORANGE = "#E04D18";
-const ORANGE_LABEL = "#B83D10";
+const ORANGE = "#F15A22";
+const ORANGE_LABEL = "#C44414";
 const GREY = "#DCDCE0";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
