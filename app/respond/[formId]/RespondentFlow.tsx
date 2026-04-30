@@ -1019,7 +1019,7 @@ function NullReflectionCard({
   return (
     <div className="flex flex-col items-center justify-center h-32 gap-2">
       <motion.p
-        className="text-muted-foreground text-sm"
+        className="text-white text-sm"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.25 }}
