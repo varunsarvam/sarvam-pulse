@@ -45,7 +45,7 @@ export default async function Home() {
   const { forms, counts } = await getFormsDashboardData();
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="flex min-h-screen items-center justify-center bg-background">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
         <section className="flex flex-wrap justify-center gap-5 [&>*]:w-full [&>*]:max-w-[300px]">
           {forms.map((form, index) => {
