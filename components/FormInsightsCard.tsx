@@ -96,7 +96,7 @@ export function FormInsightsCard({ quotes, stats }: FormInsightsCardProps) {
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
     >
       {/* Quote list — left-side content, right side leaves room for blobs */}
-      <div className="flex flex-col gap-3 px-8 py-7 pr-36">
+      <div className="flex flex-col gap-5 px-8 py-7 pr-36">
         {quotes.map((entry, i) => (
           <QuoteRow key={i} entry={entry} index={i} />
         ))}
