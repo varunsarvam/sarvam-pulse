@@ -45,29 +45,50 @@ export default async function Home() {
   const { forms, counts } = await getFormsDashboardData();
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10 md:px-10 md:py-14">
-        <section className="flex flex-wrap justify-center gap-4 [&>*]:w-full [&>*]:max-w-[180px]">
-          {forms.map((form, index) => {
-            const count = counts.get(form.id) ?? {
-              responseCount: 0,
-              completedCount: 0,
-            };
-            return (
-              <FormCard
-                key={form.id}
-                form={form}
-                responseCount={count.responseCount}
-                completedCount={count.completedCount}
-                index={index}
-              />
-            );
-          })}
+    <main className="flex min-h-screen flex-col items-center justify-between bg-background px-6 py-8 md:px-10 md:py-10">
 
-          {/* New form card — always last */}
-          <NewFormCard index={forms.length} />
-        </section>
+      {/* Top asset — ornamental logo mark */}
+      <div className="flex w-full justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/main-top-asset.png"
+          alt="Pulse"
+          className="h-12 w-auto opacity-80 -mt-4"
+          draggable={false}
+        />
       </div>
+
+      {/* Cards — vertically + horizontally centered */}
+      <section className="flex flex-nowrap justify-center gap-4 [&>*]:w-[180px] [&>*]:shrink-0">
+        {forms.map((form, index) => {
+          const count = counts.get(form.id) ?? {
+            responseCount: 0,
+            completedCount: 0,
+          };
+          return (
+            <FormCard
+              key={form.id}
+              form={form}
+              responseCount={count.responseCount}
+              completedCount={count.completedCount}
+              index={index}
+            />
+          );
+        })}
+        <NewFormCard index={forms.length} />
+      </section>
+
+      {/* Bottom asset — "INTELLIGENT FORMS" wordmark */}
+      <div className="flex w-full justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/main-bottom-asset.png"
+          alt="Intelligent Forms"
+          className="h-7 w-auto opacity-60"
+          draggable={false}
+        />
+      </div>
+
     </main>
   );
 }
