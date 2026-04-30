@@ -483,6 +483,12 @@ export function Reflection({
     typeof payload.distribution === "object" &&
     payload.distribution !== null;
 
+  // For cards questions with no distribution data, nothing meaningful to show — skip
+  if (questionInputType === "cards" && !useDistributionLayout && !useTribeLayout) {
+    advance();
+    return null;
+  }
+
   const splitVisual = useTribeLayout ? (
     <ReflectionTribe copy={copy} quotes={quotes} hideHeadline />
   ) : useSliderLayout ? (
@@ -525,26 +531,6 @@ export function Reflection({
         <div className="flex w-full items-center justify-center md:w-[45%]">
           <div className="relative flex w-full max-w-2xl flex-col items-center justify-center gap-8 rounded-3xl bg-white p-9 text-black shadow-2xl md:p-14">
             {splitVisual}
-
-            {questionInputType !== "emoji_slider" && (
-              <motion.div
-                className="flex items-center gap-4"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.45, duration: 0.2 }}
-              >
-                {REACTIONS.map(({ key, emoji }, i) => (
-                  <StickerButton
-                    key={key}
-                    emoji={emoji}
-                    index={i}
-                    reacted={reacted}
-                    onReact={() => { handleReaction(key); }}
-                    isMe={reacted === key}
-                  />
-                ))}
-              </motion.div>
-            )}
 
             {showContinue && (
               <motion.button
@@ -629,73 +615,6 @@ export function Reflection({
             {reflection.source === "llm" ? "{llm}" : "{fallback}"}
           </p>
         )}
-
-        {/* Reaction emoji row */}
-        {questionInputType !== "emoji_slider" && <motion.div
-          className="flex items-center gap-4"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45, duration: 0.2 }}
-        >
-          {REACTIONS.map(({ key, emoji }, i) => (
-            <motion.button
-              key={key}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleReaction(key);
-              }}
-              disabled={reacted !== null}
-              initial={{ opacity: 0, scale: 0.7, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{
-                delay: 0.5 + i * 0.07,
-                duration: 0.28,
-                type: "spring",
-                bounce: 0.45,
-              }}
-              whileHover={reacted === null ? { scale: 1.18, y: -3 } : {}}
-              whileTap={reacted === null ? { scale: 0.9 } : {}}
-              className={[
-                "relative flex items-center justify-center",
-                "h-16 w-16 rounded-2xl text-3xl",
-                "border border-zinc-200 bg-white",
-                "transition-colors duration-150",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                reacted === null
-                  ? "hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer"
-                  : "cursor-default",
-                reacted !== null && reacted !== key ? "opacity-30" : "",
-              ].join(" ")}
-            >
-              {/* Selected glow ring */}
-              {reacted === key && (
-                <motion.span
-                  className="absolute inset-0 rounded-2xl ring-2 ring-foreground/25"
-                  initial={{ opacity: 0, scale: 0.85 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.2 }}
-                />
-              )}
-
-              {/* Bounce + float on selection */}
-              <motion.span
-                animate={
-                  reacted === key
-                    ? { scale: [1, 1.55, 1.1, 1.25], y: [0, -14, 2, -4] }
-                    : {}
-                }
-                transition={
-                  reacted === key
-                    ? { duration: 0.45, ease: "easeOut" }
-                    : undefined
-                }
-                className="select-none"
-              >
-                {emoji}
-              </motion.span>
-            </motion.button>
-          ))}
-        </motion.div>}
 
         {showContinue && (
           <motion.button
