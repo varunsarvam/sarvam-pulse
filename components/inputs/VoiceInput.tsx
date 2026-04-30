@@ -177,6 +177,7 @@ function RecordingWaveformShader({
     }
 
     function draw(now: number) {
+      if (!gl) return;
       resize();
       smoothedAmp += (getAmpRef.current() - smoothedAmp) * 0.16;
 
