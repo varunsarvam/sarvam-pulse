@@ -427,201 +427,69 @@ function NameFieldInput({
 
 // ─── Question stage ───────────────────────────────────────────────────────────
 
-// ms between each character the typewriter drains from the queue
-const TYPEWRITER_INTERVAL_MS = 28;
 const INPUT_REVEAL_DELAY_MS = 400;
 
 function QuestionStage({
   question,
   index,
   total,
-  sessionId,
-  tone,
-  formIntent,
   onAnswer,
-  onPhrasedReady,
-  ttsDisplayText,
+  displayText,
   ttsDone,
+  showFallbackCopy,
   preamble,
-  preloaded,
-  respondentName,
   splitLayout = false,
 }: {
   question: Question;
   index: number;
   total: number;
-  sessionId: string | null;
-  tone: string;
-  formIntent: string | null;
   onAnswer: (rawValue: unknown, transcript?: string) => void;
-  onPhrasedReady: (text: string, audioUrl?: string | null) => void;
-  ttsDisplayText: string;
+  /** Typewriter-revealed text from the parent's narration. Empty until TTS ticks. */
+  displayText: string;
+  /** Whether TTS playback (or slow-TTS fallback) has finished. Gates input reveal. */
   ttsDone: boolean;
+  /** Set by the parent at 3 s if `displayText` is still empty (slow-TTS fallback). */
+  showFallbackCopy: boolean;
   preamble?: string;
-  preloaded?: PreloadItem | null;
-  respondentName?: string | null;
   splitLayout?: boolean;
 }) {
   const { input_type, options } = question;
-  // These props remain on the API but are no longer used inside QuestionStage
-  // after Phase 2.5 moved phrase fetching to the parent's preload pipeline.
-  // Marking as intentional-unused to silence lint without changing the call-site
-  // contract.
-  void sessionId;
-  void tone;
-  void formIntent;
-  void respondentName;
-  const [phrased, setPhrased] = useState<string | null>(null);
-  const [thinking, setThinking] = useState(true);
-  const [pendingTypewriterText, setPendingTypewriterText] = useState<string | null>(null);
-  // inputReady gates the answer UI — true only after typewriter finishes + delay
+
+  // Phase 6.5e: QuestionStage is a pure renderer. The parent owns all TTS
+  // state (`displayText`, `ttsDone`, `showFallbackCopy`). We only own the
+  // input-reveal timer — inputs unlock 400 ms after the parent signals
+  // ttsDone (whether by audio ending or by the slow-TTS fallback).
   const [inputReady, setInputReady] = useState(false);
-
-  // ── Typewriter internals (refs so they don't trigger re-renders) ──
-  const charQueueRef = useRef<string[]>([]);
-  const displayedRef = useRef<string>("");
-  const typingActiveRef = useRef(false);
-  const streamDoneRef = useRef(false);
-  const typewriterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const ttsFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Stable ref for onPhrasedReady so the trigger effects don't re-run on re-renders
-  const onPhrasedReadyRef = useRef(onPhrasedReady);
-  useEffect(() => { onPhrasedReadyRef.current = onPhrasedReady; }, [onPhrasedReady]);
 
   useEffect(() => {
-    if (!pendingTypewriterText) return;
-
-    if (ttsDisplayText) {
-      if (ttsFallbackTimerRef.current) {
-        clearTimeout(ttsFallbackTimerRef.current);
-        ttsFallbackTimerRef.current = null;
-      }
-      setPhrased(ttsDisplayText);
-      setThinking(false);
-    }
-
-    if (ttsDone) {
-      setPhrased(pendingTypewriterText);
-      setThinking(false);
-      setPendingTypewriterText(null);
-      revealInputs(INPUT_REVEAL_DELAY_MS);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingTypewriterText, ttsDisplayText, ttsDone]);
-
-  function revealInputs(delay: number) {
-    if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
-    inputTimerRef.current = setTimeout(() => setInputReady(true), delay);
-  }
-
-  function startTypewriter() {
-    if (typingActiveRef.current) return;
-    typingActiveRef.current = true;
-
-    function tick() {
-      const ch = charQueueRef.current.shift();
-      if (ch !== undefined) {
-        displayedRef.current += ch;
-        setPhrased(displayedRef.current);
-        setThinking(false);
-        typewriterTimerRef.current = setTimeout(tick, TYPEWRITER_INTERVAL_MS);
-      } else if (streamDoneRef.current) {
-        typingActiveRef.current = false;
-        setPhrased(displayedRef.current);
-        setThinking(false);
-        revealInputs(INPUT_REVEAL_DELAY_MS);
-      } else {
-        typingActiveRef.current = false;
-      }
-    }
-
-    typewriterTimerRef.current = setTimeout(tick, TYPEWRITER_INTERVAL_MS);
-  }
-
-  function startTypewriterWithText(text: string) {
-    if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
-    charQueueRef.current = [...text];
-    displayedRef.current = "";
-    streamDoneRef.current = true;
-    startTypewriter();
-  }
-
-  /**
-   * Hand a phrased text (and optional preloaded audio URL) to the parent's
-   * TTS pipeline AND seed the local typewriter state. After Phase 2.5's
-   * preload pipeline took over phrase fetching, this is the only way the
-   * QuestionStage publishes a question's phrasing — there is no in-component
-   * fetch anymore. Idempotency is provided by the callers (the main + watcher
-   * effects guard on `pendingTypewriterText` / `question.input_type`).
-   */
-  function queueForTtsThenType(text: string, audioUrl?: string | null) {
-    onPhrasedReadyRef.current(text, audioUrl);
-    setPendingTypewriterText(text);
-    if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
-    ttsFallbackTimerRef.current = setTimeout(() => {
-      if (!typingActiveRef.current) startTypewriterWithText(text);
-    }, 5000);
-  }
-
-  // Main per-question effect — only runs when the question changes. Resets
-  // local typewriter state and, if the phrasing is already known at mount
-  // time, fires queueForTtsThenType immediately. Otherwise the watcher
-  // effect below picks it up when `preloaded` lands.
-  useEffect(() => {
-    if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
-    if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
-    if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
-    charQueueRef.current = [];
-    displayedRef.current = "";
-    typingActiveRef.current = false;
-    streamDoneRef.current = false;
-
-    setPhrased(null);
-    setThinking(true);
-    setInputReady(false);
-    setPendingTypewriterText(null);
-
-    if (question.input_type === "name") {
-      // Name question — phrasing is the constant from the schema layer; no
-      // preload involved. Audio URL is left blank so TTSPlayer fetches it.
-      queueForTtsThenType(NAME_QUESTION_PROMPT);
-    } else if (preloaded) {
-      // Preload was already populated by the parent before we mounted.
-      queueForTtsThenType(preloaded.phrased, preloaded.audioUrl);
-    } else if (question.position === -1) {
-      // Follow-up stub (FollowUpStage uses position -1). The follow-up
-      // endpoint already returns tone-aware prompt text; treat it as the
-      // phrasing directly. No preload is ever produced for follow-ups.
-      queueForTtsThenType(question.prompt);
-    }
-    // Otherwise: wait for the watcher below to fire when `preloaded` lands.
-    // No fetch is performed here — Phase 2.5's preload pipeline owns that.
-
-    return () => {
-      if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
+    if (!ttsDone) {
       if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
-      if (ttsFallbackTimerRef.current) clearTimeout(ttsFallbackTimerRef.current);
+      setInputReady(false);
+      return;
+    }
+    if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
+    inputTimerRef.current = setTimeout(
+      () => setInputReady(true),
+      INPUT_REVEAL_DELAY_MS
+    );
+    return () => {
+      if (inputTimerRef.current) clearTimeout(inputTimerRef.current);
     };
-  // sessionId / respondentName / tone / formIntent intentionally omitted —
-  // the trigger is question identity; other context flows through props
-  // and is read at use-time via refs/closures of the helpers above.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [question.id]);
+  }, [ttsDone, question.id]);
 
-  // Watcher: fires when `preloaded` flips from null → populated AFTER the
-  // QuestionStage mounted (the parent's preloadCacheRef-to-state sync runs
-  // one render late on questionIndex change). Idempotent via the
-  // `pendingTypewriterText` guard so a same-mount preload doesn't double-fire.
-  useEffect(() => {
-    if (!preloaded) return;
-    if (question.input_type === "name") return;
-    if (pendingTypewriterText) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    queueForTtsThenType(preloaded.phrased, preloaded.audioUrl);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preloaded?.phrased, preloaded?.audioUrl, question.id]);
+  // Headline derivation — same three-state shape as Reflection:
+  // 1. typewriter ticking → show what's revealed
+  // 2. 3 s fallback fired → show full prompt
+  // 3. otherwise → render <HeadlineLoader /> (parent's HeadlineLoader is in
+  //    Reflection.tsx; we render the existing <ThinkingDots /> here for
+  //    consistency with the prior question-stage thinking treatment)
+  const isLoading = !displayText && !showFallbackCopy;
+  const headlineText = displayText
+    ? displayText
+    : showFallbackCopy
+      ? question.prompt
+      : "";
 
   function handleVoice(v: { type: "voice"; value: string; audioBlob: Blob }) {
     onAnswer({ type: "voice", value: v.value }, v.value);
@@ -716,7 +584,7 @@ function QuestionStage({
 
   const promptArea = (
     <AnimatePresence mode="popLayout">
-      {thinking ? (
+      {isLoading ? (
         <motion.div
           key="thinking"
           initial={{ opacity: 0 }}
@@ -739,7 +607,7 @@ function QuestionStage({
               : "text-2xl font-medium leading-snug"
           }
         >
-          {phrased ?? question.prompt}
+          {headlineText}
         </motion.h2>
       )}
     </AnimatePresence>
@@ -804,28 +672,20 @@ function QuestionStage({
 function FollowUpStage({
   prompt,
   inputType,
-  sessionId,
-  tone,
   questionIntent,
   onAnswer,
-  onPhrasedReady,
-  ttsDisplayText,
+  displayText,
   ttsDone,
-  preloaded,
-  respondentName,
+  showFallbackCopy,
   splitLayout,
 }: {
   prompt: string;
   inputType: "voice" | "text";
-  sessionId: string | null;
-  tone: string;
   questionIntent: string | null;
   onAnswer: (rawValue: unknown, transcript?: string) => void;
-  onPhrasedReady: (text: string, audioUrl?: string | null) => void;
-  ttsDisplayText: string;
+  displayText: string;
   ttsDone: boolean;
-  preloaded?: PreloadItem | null;
-  respondentName?: string | null;
+  showFallbackCopy: boolean;
   splitLayout?: boolean;
 }) {
   const stubQuestion = {
@@ -845,16 +705,11 @@ function FollowUpStage({
       question={stubQuestion}
       index={-1}
       total={0}
-      sessionId={sessionId}
-      tone={tone}
-      formIntent={questionIntent}
       onAnswer={onAnswer}
-      onPhrasedReady={onPhrasedReady}
-      ttsDisplayText={ttsDisplayText}
+      displayText={displayText}
       ttsDone={ttsDone}
+      showFallbackCopy={showFallbackCopy}
       preamble="One more thing…"
-      preloaded={preloaded}
-      respondentName={respondentName}
       splitLayout={splitLayout}
     />
   );
@@ -939,17 +794,34 @@ export function RespondentFlow({
   // starts fetching.
   const stageTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── TTS state ──
+  // ── TTS state (Phase 6.5e: single narration state machine) ──
+  // `narration` is the single source of truth for "what's currently being
+  // narrated." A single TTSPlayer keyed on narration.id renders below; when
+  // the id changes, the old TTSPlayer unmounts (audio paused + cleaned up)
+  // and the new one mounts with fresh audio. No two TTSPlayers ever coexist.
+  //
+  // `narrationDisplayText` is updated by TTSPlayer per typewriter tick.
+  // `narrationDone` flips true when audio ends (or errors, or fallback fires).
+  // `showFallbackCopy` flips true at 3 s if displayText is still empty —
+  // signals "TTS is too slow; render the full copy as a fallback."
   const [muted, setMuted] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("pulse-tts-muted") === "true";
   });
   const [musicActive, setMusicActive] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [phrasedForTTS, setPhrasedForTTS] = useState<string | null>(null);
-  const [preloadedAudioUrlForTTS, setPreloadedAudioUrlForTTS] = useState<string | null>(null);
-  const [ttsDisplayText, setTtsDisplayText] = useState("");
-  const [ttsDone, setTtsDone] = useState(false);
+  const [narration, setNarration] = useState<{
+    id: string;
+    text: string;
+    audioUrl: string | null;
+  } | null>(null);
+  const [narrationDisplayText, setNarrationDisplayText] = useState("");
+  const [narrationDone, setNarrationDone] = useState(false);
+  const [showFallbackCopy, setShowFallbackCopy] = useState(false);
+  const narrationDisplayTextRef = useRef("");
+  useEffect(() => {
+    narrationDisplayTextRef.current = narrationDisplayText;
+  }, [narrationDisplayText]);
   const [preloadProgress, setPreloadProgress] = useState(0);
   const [preloadError, setPreloadError] = useState(false);
 
@@ -958,9 +830,8 @@ export function RespondentFlow({
   const preloadStartedRef = useRef(false);
   const preloadNameRef = useRef<string | null>(null);
 
-  // Mirror of preloadCacheRef for the current question — ref is async-populated,
-  // so we copy the relevant entry into state to keep render reactive.
-  const [preloadedForCurrent, setPreloadedForCurrent] = useState<PreloadItem | null>(null);
+  // (Phase 6.5e: preloadedForCurrent removed — narration is derived directly
+  // from preloadCacheRef.current inside the narration effect.)
 
   function toggleMute() {
     setMuted((prev) => {
@@ -980,16 +851,14 @@ export function RespondentFlow({
   let shaderMode: PresenceShaderMode = "static";
   if (hasStarted) {
     if (stage === "QUESTION" || stage === "FOLLOWUP") {
-      shaderMode = ttsDone ? "listening" : "speaking";
+      shaderMode = narrationDone ? "listening" : "speaking";
     } else {
       shaderMode = "listening";
     }
   }
 
-  function handlePhrasedReady(text: string, audioUrl?: string | null) {
-    setPhrasedForTTS(text);
-    setPreloadedAudioUrlForTTS(audioUrl ?? null);
-  }
+  // (Phase 6.5e: handlePhrasedReady removed — narration is parent-derived
+  // from stage / question / preload via the effect above.)
 
   async function preloadQuestion(
     q: Question,
@@ -1095,17 +964,6 @@ export function RespondentFlow({
     };
   }, []);
 
-  // Sync the preload cache entry for the current question into state.
-  // preloadProgress changes whenever the cache is written, so this stays current.
-  useEffect(() => {
-    const q = questions[questionIndex];
-    if (!q) {
-      setPreloadedForCurrent(null);
-      return;
-    }
-    setPreloadedForCurrent(preloadCacheRef.current.get(q.id) ?? null);
-  }, [questionIndex, preloadProgress, questions]);
-
   // Kick off background pre-load of Q2..Qn when QUESTION stage first mounts.
   // Runs once (preloadAll guards against double-runs via preloadStartedRef).
   useEffect(() => {
@@ -1114,17 +972,61 @@ export function RespondentFlow({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, sessionId, questionIndex]);
 
-  // If preload lands for the current question before QuestionStage's live
-  // fetch fires queueForTtsThenType, hand the cached blob URL to TTSPlayer
-  // directly. This narrows the gesture-to-play window for anonymous Q1, where
-  // the sequential phrase-fetch + tts-fetch path can otherwise exceed Chrome's
-  // user-gesture autoplay tolerance.
+  // ── Phase 6.5e: derive narration from stage / question / reflection / preload ──
+  // Single source of truth for "what's being narrated right now." Whenever
+  // any of the inputs change, this effect computes the next narration and
+  // sets it. The TTSPlayer's `key` is `narration?.id`, so when it changes the
+  // old TTSPlayer unmounts (audio paused + cleaned up) and the new one
+  // mounts. State machine, not procedural.
   useEffect(() => {
-    if (stage !== "QUESTION" || !preloadedForCurrent) return;
-    if (phrasedForTTS) return;
-    setPhrasedForTTS(preloadedForCurrent.phrased);
-    setPreloadedAudioUrlForTTS(preloadedForCurrent.audioUrl);
-  }, [stage, preloadedForCurrent, phrasedForTTS]);
+    let next: { id: string; text: string; audioUrl: string | null } | null = null;
+
+    if (stage === "QUESTION" && questions[questionIndex]) {
+      const q = questions[questionIndex];
+      if (q.input_type === "name") {
+        next = { id: `Q-${q.id}`, text: NAME_QUESTION_PROMPT, audioUrl: null };
+      } else {
+        const cached = preloadCacheRef.current.get(q.id);
+        if (cached) {
+          next = { id: `Q-${q.id}`, text: cached.phrased, audioUrl: cached.audioUrl };
+        }
+        // No cached entry yet → next stays null. The preloadProgress dep
+        // re-runs this effect when the cache fills.
+      }
+    } else if (stage === "FOLLOWUP" && followUpPrompt) {
+      const qid = questions[questionIndex]?.id ?? "x";
+      next = { id: `F-${qid}-${followUpPrompt.length}`, text: followUpPrompt, audioUrl: null };
+    } else if (stage === "REFLECTION" && reflectionData) {
+      const qid = questions[questionIndex]?.id ?? "x";
+      next = { id: `R-${qid}`, text: reflectionData.copy, audioUrl: null };
+    }
+
+    setNarration((prev) => {
+      // No-op if same id — keeps TTSPlayer mounted, audio uninterrupted.
+      if (prev?.id === next?.id) return prev;
+      // Reset display state on transition. The new TTSPlayer's onDisplayedTextChange("",false) will keep it empty until typewriter ticks.
+      setNarrationDisplayText("");
+      setNarrationDone(false);
+      setShowFallbackCopy(false);
+      return next;
+    });
+  }, [stage, questionIndex, questions, followUpPrompt, reflectionData, preloadProgress]);
+
+  // Slow-TTS fallback: if the typewriter hasn't started ticking within 3 s of
+  // a new narration, surface the full copy + unblock UI. Single timer keyed
+  // on narration.id; cleared on narration change or unmount.
+  useEffect(() => {
+    if (!narration) return;
+    const t = setTimeout(() => {
+      // Only fire if typewriter still hasn't started. Use the ref to read the
+      // latest displayText without making it a dep (which would re-fire the
+      // effect on every typewriter tick).
+      if (narrationDisplayTextRef.current) return;
+      setShowFallbackCopy(true);
+      setNarrationDone(true);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [narration?.id]);
 
   // Preload next question phrasing during reflection
   const preloadNextQuestion = useCallback(() => {
@@ -1144,12 +1046,12 @@ export function RespondentFlow({
 
   // Update avatar mode based on stage
   useEffect(() => {
-    if (stage === "QUESTION" && !phrasedForTTS && !isSpeaking) {
+    if (stage === "QUESTION" && !narration && !isSpeaking) {
       setAvatarMode("thinking");
     } else if (stage === "ENTRY" || stage === "COMPLETE") {
       setAvatarMode("idle");
     }
-  }, [stage, phrasedForTTS, isSpeaking]);
+  }, [stage, narration, isSpeaking]);
 
   async function handleStart() {
     playTick();
@@ -1190,27 +1092,22 @@ export function RespondentFlow({
       clearTimeout(nullReflectionTimerRef.current);
       nullReflectionTimerRef.current = null;
     }
-    // Reflection's TTS is already finished by the time Continue is clickable
-    // (Continue is gated on reflectionTTSDone), so no audio is playing right
-    // now. The 500 ms buffer below is a visual hold — let framer-motion's
-    // exit animation finish and TTSPlayer unmount cleanly before the next
-    // stage's TTSPlayer mounts and kicks off its preload-audio playback.
+    // 500 ms visual hold before flipping stage. Reflection's TTS is already
+    // done (Continue is gated on narrationDone), so no audio is playing.
+    // The narration effect picks up the new stage/question and sets a fresh
+    // narration → TTSPlayer remounts atomically with the new key.
     if (stageTransitionTimerRef.current) {
       clearTimeout(stageTransitionTimerRef.current);
     }
     stageTransitionTimerRef.current = setTimeout(() => {
       stageTransitionTimerRef.current = null;
-      setPhrasedForTTS(null);
-      setPreloadedAudioUrlForTTS(null);
-      setIsSpeaking(false);
-      setTtsDisplayText("");
-      setTtsDone(false);
       setReflectionData(null);
       setNullReason(null);
       setNullDebugInfo(null);
       pendingReflectionRef.current = null;
       pendingNullReasonRef.current = null;
       pendingNullDebugInfoRef.current = null;
+      setIsSpeaking(false);
       setAvatarMode("thinking");
       if (questionIndex + 1 < questions.length) {
         setQuestionIndex((i) => i + 1);
@@ -1319,10 +1216,7 @@ export function RespondentFlow({
           if (follow_up) {
             pendingReflectionRef.current = reflection;
             setFollowUpPrompt(follow_up);
-            setPhrasedForTTS(null);
             setIsSpeaking(false);
-            setTtsDisplayText("");
-            setTtsDone(false);
             setAvatarMode("thinking");
             playTick();
             setStage("FOLLOWUP");
@@ -1398,20 +1292,14 @@ export function RespondentFlow({
       nullReflectionTimerRef.current = null;
     }
     const ref = reflection ?? null;
-    // Tear the question's TTS down NOW so its audio stops immediately.
-    // (In practice it's already idle — input is disabled until ttsDone — but
-    // we don't depend on that invariant here.)
-    setPhrasedForTTS(null);
-    setPreloadedAudioUrlForTTS(null);
-    setIsSpeaking(false);
-    setTtsDisplayText("");
-    setTtsDone(false);
     setFollowUpPrompt(null);
+    setIsSpeaking(false);
     setAvatarMode("idle");
     if (ref) playWhoosh();
     playTick();
-    // 500 ms buffer before flipping to REFLECTION so the question's TTSPlayer
-    // unmounts cleanly before the reflection's TTSPlayer fetches new audio.
+    // 500 ms visual hold; the narration effect picks up the new stage and
+    // swaps narrations atomically (single TTSPlayer, key change → audio
+    // pause + new fetch).
     if (stageTransitionTimerRef.current) {
       clearTimeout(stageTransitionTimerRef.current);
     }
@@ -1463,18 +1351,22 @@ export function RespondentFlow({
         muted={muted}
       />
 
-      {phrasedForTTS && (stage === "QUESTION" || stage === "FOLLOWUP") && (
+      {/* Phase 6.5e: ONE TTSPlayer for the whole flow. Keyed on narration.id —
+          when the id changes (stage / question / reflection / followup), the
+          old TTSPlayer unmounts (its cleanup pauses audio + clears src) and
+          the new one mounts atomically. No two players ever coexist. */}
+      {narration && (
         <div className="fixed bottom-4 left-4 z-50">
           <TTSPlayer
-            key={`tts-${stage}-${questionIndex}`}
-            text={phrasedForTTS}
+            key={narration.id}
+            text={narration.text}
             tone={form.tone}
             muted={muted}
-            preloadedAudioUrl={preloadedAudioUrlForTTS}
+            preloadedAudioUrl={narration.audioUrl}
             onSpeakingChange={handleSpeakingChange}
             onDisplayedTextChange={(text, isDone) => {
-              setTtsDisplayText(text);
-              if (isDone) setTtsDone(true);
+              setNarrationDisplayText(text);
+              if (isDone) setNarrationDone(true);
             }}
           />
         </div>
@@ -1516,15 +1408,10 @@ export function RespondentFlow({
                 question={questions[questionIndex]}
                 index={questionIndex}
                 total={questions.length}
-                sessionId={sessionId}
-                tone={form.tone}
-                formIntent={form.intent}
                 onAnswer={handleAnswer}
-                onPhrasedReady={handlePhrasedReady}
-                ttsDisplayText={ttsDisplayText}
-                ttsDone={ttsDone}
-                preloaded={preloadedForCurrent}
-                respondentName={respondentNameSaved}
+                displayText={narrationDisplayText}
+                ttsDone={narrationDone}
+                showFallbackCopy={showFallbackCopy}
                 splitLayout
               />
             </motion.div>
@@ -1539,14 +1426,11 @@ export function RespondentFlow({
                     ? "voice"
                     : "text"
                 }
-                sessionId={sessionId}
-                tone={form.tone}
                 questionIntent={questions[questionIndex]?.intent ?? null}
                 onAnswer={handleFollowUpAnswer}
-                onPhrasedReady={handlePhrasedReady}
-                ttsDisplayText={ttsDisplayText}
-                ttsDone={ttsDone}
-                respondentName={respondentNameSaved}
+                displayText={narrationDisplayText}
+                ttsDone={narrationDone}
+                showFallbackCopy={showFallbackCopy}
                 splitLayout
               />
             </motion.div>
@@ -1561,9 +1445,9 @@ export function RespondentFlow({
                   questionId={questions[questionIndex]?.id ?? ""}
                   questionInputType={questions[questionIndex]?.input_type}
                   splitLayout
-                  tone={form.tone}
-                  muted={muted}
-                  onSpeakingChange={handleSpeakingChange}
+                  displayText={narrationDisplayText}
+                  ttsDone={narrationDone}
+                  showFallbackCopy={showFallbackCopy}
                   onDone={advanceQuestion}
                 />
               ) : (

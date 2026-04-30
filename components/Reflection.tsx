@@ -6,11 +6,14 @@ import Lottie from "lottie-react";
 import { ReflectionDistribution } from "@/components/reflection/ReflectionDistribution";
 import { ReflectionSlider } from "@/components/reflection/ReflectionSlider";
 import { ReflectionTribe } from "@/components/reflection/ReflectionTribe";
-import { TTSPlayer } from "@/components/TTSPlayer";
 import type { ReflectionType } from "@/lib/reflection";
-import type { InputType, FormTone } from "@/lib/types";
+import type { InputType } from "@/lib/types";
 
 // ── Props ────────────────────────────────────────────────────────────────────
+// Phase 6.5e refactor: Reflection is a pure renderer. All TTS state lives in
+// the parent (RespondentFlow's narration state machine). The single TTSPlayer
+// at the parent level drives `displayText` / `ttsDone` / `showFallbackCopy`,
+// and Reflection just reads them.
 
 interface ReflectionProps {
   reflection: {
@@ -23,12 +26,12 @@ interface ReflectionProps {
   questionId: string;
   questionInputType?: InputType;
   splitLayout?: boolean;
-  /** Form tone — used to map to a TTS voice for the headline narration. */
-  tone: FormTone;
-  /** Whether the user has muted TTS. Forwarded straight to TTSPlayer. */
-  muted?: boolean;
-  /** Notifies the parent so background music can duck during reflection TTS. */
-  onSpeakingChange?: (speaking: boolean) => void;
+  /** Typewriter-revealed text from the parent's narration. Empty until TTS ticks. */
+  displayText: string;
+  /** Whether TTS playback (or the slow-TTS fallback) has finished. Gates Continue. */
+  ttsDone: boolean;
+  /** Set by the parent at 3 s if `displayText` is still empty (slow-TTS fallback). */
+  showFallbackCopy: boolean;
   onDone: () => void;
 }
 
@@ -49,9 +52,7 @@ function notoUrl(hex: string) {
 // Continue button shows up this many ms after TTS finishes. Replaces the
 // pre-TTS arbitrary 5s reveal timer.
 const CONTINUE_AFTER_TTS_MS = 1000;
-// If TTS hasn't started typing within this window, give up and reveal the
-// full copy so the user isn't staring at an empty headline forever.
-const FALLBACK_COPY_DELAY_MS = 3000;
+// (FALLBACK_COPY_DELAY_MS lives in RespondentFlow now — narration is parent-owned.)
 
 // ── Headline loader ──────────────────────────────────────────────────────────
 // Three pulsing dots rendered inline in the headline area while we wait for
@@ -446,53 +447,23 @@ export function Reflection({
   questionId,
   questionInputType,
   splitLayout = false,
-  tone,
-  muted = false,
-  onSpeakingChange,
+  displayText,
+  ttsDone,
+  showFallbackCopy,
   onDone,
 }: ReflectionProps) {
   const [reacted, setReacted] = useState<string | null>(null);
   const [showContinue, setShowContinue] = useState(false);
   const continueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doneRef = useRef(false);
-
-  // ── Reflection TTS state ─────────────────────────────────────────────────
-  // displayText is updated by TTSPlayer per typewriter tick (28 ms) once audio
-  // starts playing. Until then it's empty and the headline render holds an
-  // invisible placeholder so the layout doesn't shift. ttsDone flips true when
-  // audio finishes (or errors, per TTSPlayer's onerror handler).
-  //
-  // showFallbackCopy is the safety net for slow Sarvam TTS — if the typewriter
-  // hasn't started after 3 s, we reveal the full copy so the user isn't
-  // staring at empty space. Once typewriter ticks arrive the displayText path
-  // wins regardless.
-  const [reflectionTTSDisplayText, setReflectionTTSDisplayText] = useState("");
-  const [reflectionTTSDone, setReflectionTTSDone] = useState(false);
-  const [showFallbackCopy, setShowFallbackCopy] = useState(false);
-
-  function clearTimers() {
-    if (continueTimerRef.current) {
-      clearTimeout(continueTimerRef.current);
-      continueTimerRef.current = null;
-    }
-    if (fallbackTimerRef.current) {
-      clearTimeout(fallbackTimerRef.current);
-      fallbackTimerRef.current = null;
-    }
-  }
-
-  const advance = useCallback(() => {
-    if (doneRef.current) return;
-    doneRef.current = true;
-    clearTimers();
-    onDone();
-  }, [onDone]);
 
   // Reveal the Continue button 1 s after TTS playback finishes. No silent
   // auto-advance — the user must press Continue. Reactions are visual only.
   useEffect(() => {
-    if (!reflectionTTSDone) return;
+    if (!ttsDone) {
+      setShowContinue(false);
+      return;
+    }
     if (continueTimerRef.current) clearTimeout(continueTimerRef.current);
     continueTimerRef.current = setTimeout(
       () => setShowContinue(true),
@@ -501,32 +472,14 @@ export function Reflection({
     return () => {
       if (continueTimerRef.current) clearTimeout(continueTimerRef.current);
     };
-  }, [reflectionTTSDone]);
+  }, [ttsDone]);
 
-  // Slow-TTS safety net: if the typewriter hasn't started within 3 s, drop
-  // the empty placeholder and show the full copy. Cancelled the moment any
-  // displayText arrives (cleared in the effect below).
-  useEffect(() => {
-    fallbackTimerRef.current = setTimeout(
-      () => setShowFallbackCopy(true),
-      FALLBACK_COPY_DELAY_MS
-    );
-    return () => {
-      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-    };
-  }, []);
-
-  // As soon as TTSPlayer ticks the first character, kill the fallback timer —
-  // the typewriter is the source of truth from here on.
-  useEffect(() => {
-    if (!reflectionTTSDisplayText) return;
-    if (fallbackTimerRef.current) {
-      clearTimeout(fallbackTimerRef.current);
-      fallbackTimerRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (showFallbackCopy) setShowFallbackCopy(false);
-  }, [reflectionTTSDisplayText, showFallbackCopy]);
+  const advance = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    if (continueTimerRef.current) clearTimeout(continueTimerRef.current);
+    onDone();
+  }, [onDone]);
 
   function handleContinue() {
     if (!showContinue) return;
@@ -547,7 +500,7 @@ export function Reflection({
 
   useEffect(() => {
     return () => {
-      clearTimers();
+      if (continueTimerRef.current) clearTimeout(continueTimerRef.current);
     };
   }, []);
 
@@ -572,49 +525,19 @@ export function Reflection({
   }
 
   const { type, copy, payload } = reflection;
-  // Three-state render so there's no flash of full text on mount:
-  // 1. typewriter is ticking → show what the typewriter has revealed so far
-  // 2. typewriter hasn't started AND > 3 s elapsed → show full copy (slow-TTS fallback)
-  // 3. typewriter hasn't started AND < 3 s elapsed → render <HeadlineLoader /> (3 pulsing dots)
-  //
-  // `isLoading` is the state-3 flag the H1 render uses to swap in the loader.
-  // `headlineText` is the string for states 1 and 2 (empty when isLoading) —
-  // passed down to layouts as `displayText`. Layouts use the
-  // `displayText !== undefined ? displayText : copy` semantics from 6.5d, so
-  // an empty string from us renders empty in their H2; the parent's H1 +
-  // loader is the only headline visible in splitLayout.
-  const isLoading = !reflectionTTSDisplayText && !showFallbackCopy;
-  const headlineText = reflectionTTSDisplayText
-    ? reflectionTTSDisplayText
+  // Three-state render driven entirely by parent narration props (Phase 6.5e):
+  // 1. typewriter ticking (`displayText` non-empty) → show what's revealed
+  // 2. fallback fired (`showFallbackCopy=true`) → show full `copy`
+  // 3. otherwise → render <HeadlineLoader />
+  const isLoading = !displayText && !showFallbackCopy;
+  const headlineText = displayText
+    ? displayText
     : showFallbackCopy
       ? copy
       : "";
   const quotes = Array.isArray(payload.quotes)
     ? payload.quotes.filter((q): q is string => typeof q === "string")
     : [];
-
-  // Mount the TTS player once per reflection. The component remounts
-  // naturally when the parent flow leaves and re-enters REFLECTION (the
-  // wrapping <motion.div key="reflection"> wraps a new tree per reflection),
-  // so a static key is fine — there's no in-place reflection swap to handle.
-  // Wrapped in a fixed-position container so TTSPlayer's small equalizer
-  // indicator doesn't disturb the flex layouts below.
-  const ttsPlayer = (
-    <div className="pointer-events-none fixed bottom-4 left-4 z-50">
-      <TTSPlayer
-        key="reflection-tts"
-        text={copy}
-        tone={tone}
-        muted={muted}
-        preloadedAudioUrl={null}
-        onSpeakingChange={onSpeakingChange}
-        onDisplayedTextChange={(text, isDone) => {
-          setReflectionTTSDisplayText(text);
-          if (isDone) setReflectionTTSDone(true);
-        }}
-      />
-    </div>
-  );
 
   // True if a distribution payload contains at least one positive count
   function hasNonZeroDistribution(value: unknown): boolean {
@@ -668,7 +591,6 @@ export function Reflection({
           onClick={handleCardClick}
           onKeyDown={handleCardKeyDown}
         >
-          {ttsPlayer}
           <div className="flex w-full max-w-3xl flex-col items-center gap-7 px-6 text-center md:px-12">
             <motion.h1
               className="font-display text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
@@ -714,7 +636,6 @@ export function Reflection({
         onClick={handleCardClick}
         onKeyDown={handleCardKeyDown}
       >
-        {ttsPlayer}
         <div className="flex w-full flex-col justify-center gap-7 px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
           <motion.h1
             className="font-display max-w-2xl text-left text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
@@ -776,7 +697,6 @@ export function Reflection({
         onClick={handleCardClick}
         onKeyDown={handleCardKeyDown}
       >
-        {ttsPlayer}
         {useTribeLayout ? (
           <ReflectionTribe copy={copy} quotes={quotes} displayText={headlineText} />
         ) : useSliderLayout ? (
