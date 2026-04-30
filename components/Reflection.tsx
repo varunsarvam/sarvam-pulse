@@ -291,11 +291,11 @@ function EmotionWash({ payload }: { payload: Record<string, unknown> }) {
 
 const STICKER_ROTATIONS = [-6, 4, -3, 7];
 
-// White stroke (sticker die-cut) + subtle lift shadow
+// Die-cut sticker: hard white outline via 8-directional offsets + lift shadow
 const STICKER_FILTER =
-  "drop-shadow(0 0 2.5px #fff) drop-shadow(0 0 2.5px #fff) drop-shadow(0 0 2.5px #fff) drop-shadow(0 2px 6px rgba(0,0,0,0.10))";
+  "drop-shadow(3px 0 0 #fff) drop-shadow(-3px 0 0 #fff) drop-shadow(0 3px 0 #fff) drop-shadow(0 -3px 0 #fff) drop-shadow(2px 2px 0 #fff) drop-shadow(-2px 2px 0 #fff) drop-shadow(2px -2px 0 #fff) drop-shadow(-2px -2px 0 #fff) drop-shadow(0 3px 8px rgba(0,0,0,0.12))";
 const STICKER_FILTER_HOVER =
-  "drop-shadow(0 0 3px #fff) drop-shadow(0 0 3px #fff) drop-shadow(0 0 3px #fff) drop-shadow(0 4px 12px rgba(0,0,0,0.14))";
+  "drop-shadow(3px 0 0 #fff) drop-shadow(-3px 0 0 #fff) drop-shadow(0 3px 0 #fff) drop-shadow(0 -3px 0 #fff) drop-shadow(2px 2px 0 #fff) drop-shadow(-2px 2px 0 #fff) drop-shadow(2px -2px 0 #fff) drop-shadow(-2px -2px 0 #fff) drop-shadow(0 5px 14px rgba(0,0,0,0.18))";
 
 function StickerButton({
   emoji,
