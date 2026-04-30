@@ -66,7 +66,7 @@ export function FormCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.08, ease: "easeOut" }}
       whileHover={{ scale: 1.015, y: -2 }}
-      className="relative flex min-h-[260px] cursor-pointer flex-col overflow-hidden rounded-2xl p-5 shadow-lg"
+      className="relative flex aspect-[3/4] cursor-pointer flex-col overflow-hidden rounded-2xl p-5 shadow-lg"
       style={{ background: bg }}
     >
       {/* Header row */}

@@ -22,7 +22,7 @@ export function NewFormCard({ index }: { index: number }) {
     >
       <Link
         href="/create"
-        className="relative flex min-h-[260px] cursor-pointer flex-col overflow-hidden rounded-2xl shadow-sm"
+        className="relative flex aspect-[3/4] cursor-pointer flex-col overflow-hidden rounded-2xl shadow-sm"
         style={{ background: "#f5f4f0" }}
       >
         {/* Plus sign */}
