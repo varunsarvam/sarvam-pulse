@@ -343,8 +343,6 @@ export function CompleteStage({
         style={{
           transformStyle: "preserve-3d",
           willChange: "transform",
-          filter:
-            "drop-shadow(0 60px 120px rgba(0,0,0,0.32)) drop-shadow(0 14px 40px rgba(0,0,0,0.18))",
         }}
       >
         {/* Card */}
@@ -390,7 +388,7 @@ export function CompleteStage({
           />
 
           {/* Card content */}
-          <div className="relative z-10 flex h-full flex-col justify-between p-6">
+          <div className="relative z-10 flex h-full flex-col p-6">
             {/* Top: brand */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -407,8 +405,11 @@ export function CompleteStage({
               </span>
             </div>
 
-            {/* Middle: identity */}
-            <div className="flex flex-col items-center gap-3 text-center">
+            {/* Spacer — shader circle lives here */}
+            <div className="flex-1" />
+
+            {/* Bottom: identity text */}
+            <div className="flex flex-col items-center gap-2 text-center">
               <h2
                 className="text-3xl font-bold leading-[1.1] tracking-tight text-white"
                 style={{ fontFamily: "var(--font-display)" }}
@@ -426,12 +427,8 @@ export function CompleteStage({
               >
                 {identity.summary}
               </p>
-            </div>
-
-            {/* Bottom: respondent name if available */}
-            <div className="flex items-end justify-center">
               {respondentName && (
-                <span className="font-mono text-[10px] text-white/45">
+                <span className="mt-2 font-mono text-[10px] text-white/40">
                   {respondentName}
                 </span>
               )}
