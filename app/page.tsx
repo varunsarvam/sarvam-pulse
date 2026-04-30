@@ -4,6 +4,11 @@ import { NewFormCard } from "@/components/NewFormCard";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { Form } from "@/lib/types";
 
+// Render at request time, not build time — avoids hitting Supabase during
+// `next build`, which fails on Vercel if env vars aren't injected during the
+// build phase.
+export const dynamic = "force-dynamic";
+
 interface SessionCountRow {
   form_id: string;
   completed_at: string | null;
