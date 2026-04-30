@@ -84,8 +84,7 @@ function EmojiCard({
         <AnimatePresence>
           {selected && (
             <motion.span
-              className="text-[11px] font-semibold"
-              style={{ color: step.ring }}
+              className="text-[11px] font-normal text-zinc-600"
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
