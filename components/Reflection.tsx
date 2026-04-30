@@ -72,9 +72,9 @@ function ComparisonVisual({ payload }: { payload: Record<string, unknown> }) {
         Where you land
       </p>
 
-      {/* Big mono value — focal element, no collision */}
+      {/* Big Seasons display number */}
       <motion.p
-        className="mb-7 mt-2 text-center font-mono text-[30px] font-medium tabular-nums leading-none tracking-tight text-foreground/85"
+        className="mb-7 mt-2 text-center font-display text-[52px] leading-none tracking-tight text-foreground/85"
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25, duration: 0.3 }}
