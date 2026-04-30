@@ -16,16 +16,15 @@ interface OptionColumn {
 
 // ── Layout / palette ─────────────────────────────────────────────────────────
 
-const MAX_ROWS = 15;
-const DOT_STEP = 16;
-const DOT_SIZE = 10;
-const MARKER_SIZE = 14;
-const COL_HEIGHT = 280;
+const MAX_ROWS = 12;
+const DOT_STEP = 18;
+const DOT_SIZE = 14;
+const MARKER_SIZE = 18;
+const COL_HEIGHT = MAX_ROWS * DOT_STEP + DOT_SIZE * 2 + 20;
 
-const AMBER = "#FFB680";
-const AMBER_DEEP_TEXT = "#C56F2E";
-const AMBER_GLOW = "rgba(255, 165, 90, 0.55)";
-const RING_GREY = "rgba(0, 0, 0, 0.18)";
+const ORANGE = "#FF8C42";
+const ORANGE_LABEL = "#C56F2E";
+const GREY = "#D8D8DC";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -106,69 +105,14 @@ export function ReflectionDistribution({
                 className="relative w-full max-w-[140px]"
                 style={{ height: COL_HEIGHT }}
               >
-                {/* Atmospheric warm column glow — chosen only */}
-                {column.isChosen && (
-                  <motion.div
-                    className="pointer-events-none absolute"
-                    style={{
-                      bottom: -10,
-                      left: "calc(50% - 32px)",
-                      width: 64,
-                      height: COL_HEIGHT + 20,
-                      background:
-                        "radial-gradient(ellipse 48% 56% at 50% 55%, rgba(255, 165, 95, 0.18) 0%, rgba(255, 165, 95, 0.05) 55%, transparent 78%)",
-                    }}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: [0.6, 1, 0.6] }}
-                    transition={{
-                      duration: 3.6,
-                      repeat: Infinity,
-                      ease: "easeInOut",
-                      delay: 0.8,
-                    }}
-                  />
-                )}
-
-                {/* Dots */}
+                {/* Solid filled dots — Bauhaus grid */}
                 {dots.map((_, dotIndex) => {
                   const pos = dotPosition(dotIndex);
-                  const baseDelay = column.isChosen ? 0.7 : columnIndex * 0.06;
-                  const span = column.isChosen ? 0.85 : 0.45;
+                  const baseDelay = column.isChosen ? 0.55 : columnIndex * 0.05;
+                  const span = column.isChosen ? 0.55 : 0.4;
                   const delay =
                     baseDelay +
                     (dotIndex / Math.max(1, column.count)) * span;
-
-                  if (column.isChosen) {
-                    return (
-                      <motion.span
-                        key={dotIndex}
-                        className="absolute rounded-full"
-                        style={{
-                          width: DOT_SIZE,
-                          height: DOT_SIZE,
-                          bottom: pos.bottom,
-                          left: pos.left,
-                        }}
-                        initial={{
-                          opacity: 0,
-                          scale: 0.3,
-                          backgroundColor: "rgba(0, 0, 0, 0.12)",
-                          boxShadow: "0 0 0 rgba(255, 165, 90, 0)",
-                        }}
-                        animate={{
-                          opacity: 1,
-                          scale: 1,
-                          backgroundColor: AMBER,
-                          boxShadow: `0 0 8px ${AMBER_GLOW}`,
-                        }}
-                        transition={{
-                          delay,
-                          duration: 0.5,
-                          ease: "easeOut",
-                        }}
-                      />
-                    );
-                  }
 
                   return (
                     <motion.span
@@ -179,35 +123,34 @@ export function ReflectionDistribution({
                         height: DOT_SIZE,
                         bottom: pos.bottom,
                         left: pos.left,
-                        border: `1.5px solid ${RING_GREY}`,
-                        background: "transparent",
+                        background: column.isChosen ? ORANGE : GREY,
                       }}
-                      initial={{ opacity: 0, scale: 0.4, y: 6 }}
+                      initial={{ opacity: 0, scale: 0.4, y: 4 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       transition={{
                         delay,
-                        duration: 0.24,
+                        duration: 0.32,
                         ease: "easeOut",
                       }}
                     />
                   );
                 })}
 
-                {/* Beacon marker — "you are here" */}
+                {/* "You are here" marker */}
                 {column.isChosen && (
                   <motion.div
                     className="absolute"
                     style={{
                       width: MARKER_SIZE,
                       height: MARKER_SIZE,
-                      bottom: userDot.bottom + 4,
+                      bottom: userDot.bottom + 6,
                       left: `calc(50% + ${markerColOffset}px - ${MARKER_SIZE / 2}px)`,
                     }}
-                    initial={{ opacity: 0, scale: 0.2, y: -14 }}
+                    initial={{ opacity: 0, scale: 0.2, y: -12 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{
-                      delay: 1.7,
-                      duration: 0.55,
+                      delay: 1.4,
+                      duration: 0.5,
                       type: "spring",
                       bounce: 0.5,
                     }}
@@ -217,25 +160,25 @@ export function ReflectionDistribution({
                       className="pointer-events-none absolute inset-0 rounded-full"
                       animate={{
                         boxShadow: [
-                          "0 0 0 0 rgba(255, 160, 90, 0.55)",
-                          "0 0 0 10px rgba(255, 160, 90, 0)",
+                          "0 0 0 0 rgba(255, 140, 66, 0.5)",
+                          "0 0 0 10px rgba(255, 140, 66, 0)",
                         ],
                       }}
                       transition={{
                         duration: 2.2,
                         repeat: Infinity,
                         ease: "easeOut",
-                        delay: 2.3,
+                        delay: 1.9,
                       }}
                     />
-                    {/* Core */}
+                    {/* Solid orange core with subtle white inner highlight */}
                     <span
                       className="absolute inset-0 rounded-full"
                       style={{
                         background:
-                          "radial-gradient(circle at 32% 28%, #FFF2DC 0%, #FFAF7A 45%, #FF8E48 95%)",
+                          "radial-gradient(circle at 32% 28%, #FFE0C5 0%, #FF8C42 55%, #ED6F22 100%)",
                         boxShadow:
-                          "0 0 14px 3px rgba(255, 160, 90, 0.5), inset 0 1px 1px rgba(255, 240, 220, 0.6)",
+                          "0 0 12px 2px rgba(255, 140, 66, 0.42), inset 0 1px 1px rgba(255, 230, 200, 0.55)",
                       }}
                     />
                   </motion.div>
@@ -248,20 +191,43 @@ export function ReflectionDistribution({
                   maxWidth: 160,
                   fontSize: 14,
                   lineHeight: 1.3,
-                  color: column.isChosen ? AMBER_DEEP_TEXT : "rgba(120, 120, 130, 0.78)",
+                  color: column.isChosen
+                    ? ORANGE_LABEL
+                    : "rgba(120, 120, 130, 0.78)",
                   fontWeight: column.isChosen ? 500 : 400,
                   letterSpacing: column.isChosen ? "-0.005em" : 0,
                 }}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
-                  delay: column.isChosen ? 1.95 : 0.45 + columnIndex * 0.05,
+                  delay: column.isChosen ? 1.6 : 0.4 + columnIndex * 0.05,
                   duration: 0.32,
                 }}
                 title={column.label}
               >
                 {shortLabel(column.label)}
               </motion.p>
+
+              {/* Mono count badge */}
+              <motion.span
+                className="font-mono tabular-nums"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.1em",
+                  color: column.isChosen
+                    ? ORANGE_LABEL
+                    : "rgba(120, 120, 130, 0.45)",
+                  marginTop: -8,
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{
+                  delay: column.isChosen ? 1.75 : 0.55 + columnIndex * 0.05,
+                  duration: 0.3,
+                }}
+              >
+                {String(column.count).padStart(2, "0")}
+              </motion.span>
             </div>
           );
         })}

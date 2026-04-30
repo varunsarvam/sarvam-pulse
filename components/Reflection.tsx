@@ -63,58 +63,59 @@ function CountUp({ to, duration = 400 }: { to: number; duration?: number }) {
 
 function ComparisonVisual({ payload }: { payload: Record<string, unknown> }) {
   const pct = (payload.percentile as number) ?? 50;
+  const rounded = Math.round(pct);
 
   return (
     <div className="w-full max-w-sm mx-auto">
-      {/* Mono caption — tells you what this bar represents */}
-      <p className="mb-5 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/55">
+      {/* Mono caption */}
+      <p className="text-center font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/55">
         Where you land
       </p>
 
-      <div className="relative h-2.5 rounded-full bg-zinc-200/60">
-        {/* Filled track — pastel violet→blue, matching circular loader */}
-        <motion.div
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{
-            background: "linear-gradient(to right, #c4b5fd, #93c5fd)",
-          }}
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-        />
+      {/* Big mono value — focal element, no collision */}
+      <motion.p
+        className="mb-7 mt-2 text-center font-mono text-[30px] font-medium tabular-nums leading-none tracking-tight text-foreground/85"
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25, duration: 0.3 }}
+      >
+        {rounded}
+      </motion.p>
 
-        {/* Floating mono value above the dot */}
-        <motion.div
-          className="pointer-events-none absolute -top-7 font-mono text-[11px] font-medium tabular-nums tracking-tight text-foreground/80"
-          style={{
-            left: `${pct}%`,
-            transform: "translateX(-50%)",
-          }}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.22 }}
-        >
-          {Math.round(pct)}
-        </motion.div>
+      <div className="relative">
+        {/* Track */}
+        <div className="relative h-2.5 overflow-hidden rounded-full bg-zinc-200/60">
+          {/* Filled gradient — matches question-1 loader: violet-300 → foreground/80 → blue-300 */}
+          <motion.div
+            className="absolute inset-0"
+            initial={{ clipPath: "inset(0 100% 0 0)" }}
+            animate={{ clipPath: `inset(0 ${100 - pct}% 0 0)` }}
+            transition={{ duration: 0.75, ease: "easeOut" }}
+            style={{
+              background:
+                "linear-gradient(to right, #c4b5fd 0%, rgba(24,24,27,0.78) 50%, #93c5fd 100%)",
+            }}
+          />
+        </div>
 
-        {/* Soft glowing dot */}
+        {/* Dot positioned over the bar */}
         <motion.div
           className="absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full"
           style={{
             left: `${pct}%`,
             marginLeft: -10,
             background:
-              "radial-gradient(circle at 35% 30%, #ffffff 0%, #c4b5fd 75%)",
+              "radial-gradient(circle at 35% 30%, #ffffff 0%, #d8d4ee 60%, #93c5fd 100%)",
             boxShadow:
-              "0 0 18px 4px rgba(196,181,253,0.55), 0 0 5px rgba(147,197,253,0.5)",
+              "0 0 18px 4px rgba(196,181,253,0.5), 0 0 5px rgba(147,197,253,0.55)",
           }}
           initial={{ opacity: 0, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.45, duration: 0.3, type: "spring", bounce: 0.45 }}
+          transition={{ delay: 0.55, duration: 0.3, type: "spring", bounce: 0.45 }}
         />
       </div>
 
-      <div className="mt-2 flex justify-between font-mono text-[10px] tracking-wider text-muted-foreground/40">
+      <div className="mt-3 flex justify-between font-mono text-[10px] tracking-wider text-muted-foreground/40">
         <span>0</span>
         <span>100</span>
       </div>
