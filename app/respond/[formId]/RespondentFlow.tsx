@@ -429,7 +429,7 @@ function NameFieldInput({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2, duration: 0.4 }}
-        className="text-sm text-white/40 hover:text-white/70 transition-colors disabled:pointer-events-none underline underline-offset-4 decoration-white/20"
+        className="text-sm text-zinc-400 hover:text-zinc-600 transition-colors disabled:pointer-events-none"
       >
         stay anonymous →
       </motion.button>
