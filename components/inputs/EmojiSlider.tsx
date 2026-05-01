@@ -95,7 +95,7 @@ function EmojiCard({
         {lottieData && (
           <Lottie
             animationData={lottieData}
-            style={{ width: 72, height: 72 }}
+            className="h-14 w-14 md:h-[72px] md:w-[72px]"
             loop
             autoplay
           />

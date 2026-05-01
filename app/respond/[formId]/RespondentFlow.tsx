@@ -181,10 +181,10 @@ function EntryScreen({
   }, [quoteSource.length]);
 
   return (
-    <div className="relative flex h-full w-full -translate-y-6 flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8">
-      <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
+    <div className="relative flex h-full w-full flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8">
+      <div className="flex w-full items-center px-4 pt-8 md:w-[55%] md:px-14 md:pt-0">
         <div className="flex flex-col items-start gap-7">
-          <h1 className="font-display max-w-2xl text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]">
+          <h1 className="font-display max-w-2xl text-[2rem] leading-tight tracking-tight text-white md:text-[3.375rem]">
             {form.title}
           </h1>
           <div className="flex flex-col items-start gap-4">
@@ -376,19 +376,19 @@ function NameFieldInput({
           onKeyDown={handleKeyDown}
           aria-label="Your Name"
           disabled={disabled}
-          className="font-matter w-full border-0 bg-transparent px-0 py-4 text-center text-[2.4rem] font-medium leading-tight text-transparent caret-transparent outline-none disabled:cursor-not-allowed md:text-[3.25rem]"
+          className="font-matter w-full border-0 bg-transparent px-0 py-4 text-center text-[1.75rem] font-medium leading-tight text-transparent caret-transparent outline-none disabled:cursor-not-allowed md:text-[3.25rem]"
           maxLength={30}
         />
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-0 py-4">
           <span
-            className={`font-matter text-[2.4rem] font-medium leading-tight md:text-[3.25rem] ${
+            className={`font-matter text-[1.75rem] font-medium leading-tight md:text-[3.25rem] ${
               name ? "text-foreground" : "text-foreground/25"
             }`}
           >
             {name || "Your Name"}
           </span>
           <motion.span
-            className="ml-2 h-[2.4rem] w-[5px] rounded-full bg-[#ff4d00] md:h-[3.25rem] md:w-[6px]"
+            className="ml-2 h-[1.75rem] w-[4px] rounded-full bg-[#ff4d00] md:h-[3.25rem] md:w-[6px]"
             animate={{ opacity: [0, 1, 1, 0] }}
             transition={{ duration: 1.05, repeat: Infinity, times: [0, 0.2, 0.72, 1] }}
           />
@@ -410,7 +410,7 @@ function NameFieldInput({
               <Button
                 variant="ghost"
                 size="lg"
-                className="group relative isolate h-16 overflow-hidden rounded-[999px] bg-[#111820] px-12 text-xl font-medium text-white shadow-none transition-transform hover:scale-[1.03] hover:bg-[#0b1118] hover:text-white disabled:opacity-45"
+                className="group relative isolate h-12 overflow-hidden rounded-[999px] bg-[#111820] px-8 text-base font-medium text-white shadow-none transition-transform hover:scale-[1.03] hover:bg-[#0b1118] hover:text-white disabled:opacity-45 md:h-16 md:px-12 md:text-xl"
                 onClick={handleClick}
                 disabled={!valid || disabled}
               >
@@ -615,7 +615,7 @@ function QuestionStage({
           transition={{ duration: 0.3, ease: "easeOut" as const }}
           className={
             splitLayout
-              ? "font-display text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
+              ? "font-display text-[1.875rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
               : "text-2xl font-medium leading-snug"
           }
         >
@@ -627,11 +627,11 @@ function QuestionStage({
 
   if (splitLayout) {
     return (
-      <div className="flex min-h-screen w-full -translate-y-6 flex-col gap-6 p-4 md:-translate-y-8 md:flex-row md:p-4">
-        <div className="flex w-full items-center px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
+      <div className="flex min-h-screen w-full flex-col gap-4 p-4 md:-translate-y-8 md:flex-row md:gap-6 md:p-4">
+        <div className="flex w-full items-start px-4 pt-8 md:w-[55%] md:items-center md:px-14 md:pt-0">
           <div className="max-w-2xl text-left">{promptArea}</div>
         </div>
-        <div className="flex w-full items-center justify-center md:w-[45%]">
+        <div className="flex w-full items-center justify-center pb-6 md:w-[45%] md:pb-0">
           <AnimatePresence mode="wait">
             {isAnswering ? (
               <motion.div

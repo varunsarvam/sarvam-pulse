@@ -63,8 +63,8 @@ export default async function Home() {
         />
       </div>
 
-      {/* Cards — vertically + horizontally centered */}
-      <section className="flex flex-nowrap justify-center gap-4 [&>*]:w-[180px] [&>*]:shrink-0">
+      {/* Cards — horizontal scroll on mobile, centered row on desktop */}
+      <section className="scrollbar-none -mx-6 flex snap-x snap-mandatory flex-nowrap gap-4 overflow-x-auto px-6 py-2 md:mx-0 md:snap-none md:justify-center md:overflow-x-visible md:px-0 [&>*]:w-[180px] [&>*]:shrink-0 [&>*]:snap-center">
         {forms.map((form, index) => {
           const count = counts.get(form.id) ?? {
             responseCount: 0,

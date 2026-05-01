@@ -593,9 +593,9 @@ export function Reflection({
           onClick={handleCardClick}
           onKeyDown={handleCardKeyDown}
         >
-          <div className="flex w-full max-w-3xl flex-col items-center gap-7 px-6 text-center md:px-12">
+          <div className="flex w-full max-w-3xl flex-col items-center gap-6 px-4 text-center md:gap-7 md:px-12">
             <motion.h1
-              className="font-display text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
+              className="font-display text-[1.875rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, ease: "easeOut" }}
@@ -634,15 +634,15 @@ export function Reflection({
 
     return (
       <div
-        className="flex min-h-screen w-full -translate-y-6 flex-col gap-6 p-5 md:-translate-y-8 md:flex-row md:p-8"
+        className="flex min-h-screen w-full flex-col gap-4 p-4 md:-translate-y-8 md:flex-row md:gap-6 md:p-8"
         role={showContinue ? "button" : undefined}
         tabIndex={showContinue ? 0 : undefined}
         onClick={handleCardClick}
         onKeyDown={handleCardKeyDown}
       >
-        <div className="flex w-full flex-col justify-center gap-7 px-8 pt-16 md:w-[55%] md:px-14 md:pt-0">
+        <div className="flex w-full flex-col justify-start gap-5 px-4 pt-8 md:w-[55%] md:justify-center md:gap-7 md:px-14 md:pt-0">
           <motion.h1
-            className="font-display max-w-2xl text-left text-[2.625rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
+            className="font-display max-w-2xl text-left text-[1.875rem] leading-tight tracking-tight text-white md:text-[3.375rem]"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, ease: "easeOut" }}
@@ -653,8 +653,8 @@ export function Reflection({
             <EmojiBar reacted={reacted} onReact={handleReaction} dark />
           )}
         </div>
-        <div className="flex w-full items-center justify-center md:w-[45%]">
-          <div className="relative flex w-full max-w-2xl flex-col items-center justify-center gap-8 rounded-3xl bg-white p-9 text-black shadow-2xl md:p-14">
+        <div className="flex w-full items-center justify-center pb-6 md:w-[45%] md:pb-0">
+          <div className="relative flex w-full max-w-2xl flex-col items-center justify-center gap-6 rounded-3xl bg-white p-6 text-black shadow-2xl md:gap-8 md:p-14">
             {splitVisual}
 
             {showContinue && (

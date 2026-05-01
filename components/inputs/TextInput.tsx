@@ -56,7 +56,7 @@ export function TextInput({
         rows={5}
         placeholder="Take your time..."
         aria-label="Text answer"
-        className="font-matter scrollbar-none min-h-[180px] max-h-[260px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-snug text-foreground outline-none placeholder:text-foreground/25 disabled:cursor-not-allowed md:text-[2rem]"
+        className="font-matter scrollbar-none min-h-[140px] max-h-[220px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[1.15rem] font-medium leading-snug text-foreground outline-none placeholder:text-foreground/25 disabled:cursor-not-allowed md:min-h-[180px] md:max-h-[260px] md:text-[2rem]"
         style={{ caretColor: "#ff4d00" }}
       />
 

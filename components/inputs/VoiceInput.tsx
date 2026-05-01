@@ -555,16 +555,16 @@ export function VoiceInput({ question, onSubmit, disabled = false }: VoiceInputP
                 onScroll={syncOverlayScroll}
                 rows={4}
                 autoFocus
-                className="font-matter scrollbar-none min-h-[180px] max-h-[260px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[1.6rem] font-medium leading-snug text-transparent caret-transparent outline-none md:text-[2rem]"
+                className="font-matter scrollbar-none min-h-[140px] max-h-[220px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-[1.15rem] font-medium leading-snug text-transparent caret-transparent outline-none md:min-h-[180px] md:max-h-[260px] md:text-[2rem]"
               />
               <div
                 ref={overlayRef}
                 className="pointer-events-none absolute inset-0 max-h-[260px] overflow-y-hidden px-2 py-2"
               >
-                <div className="font-matter whitespace-pre-wrap break-words text-[1.6rem] font-medium leading-snug text-foreground md:text-[2rem]">
+                <div className="font-matter whitespace-pre-wrap break-words text-[1.15rem] font-medium leading-snug text-foreground md:text-[2rem]">
                   {transcript}
                   <motion.span
-                    className="ml-1 inline-block h-[1.6rem] w-[5px] translate-y-1 rounded-full bg-[#ff4d00] md:h-[2rem] md:w-[6px]"
+                    className="ml-1 inline-block h-[1.15rem] w-[3px] translate-y-1 rounded-full bg-[#ff4d00] md:h-[2rem] md:w-[6px]"
                     animate={{ opacity: [0, 1, 1, 0] }}
                     transition={{ duration: 1.05, repeat: Infinity, times: [0, 0.2, 0.72, 1] }}
                   />
