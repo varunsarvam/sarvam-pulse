@@ -421,6 +421,19 @@ function NameFieldInput({
             </motion.div>
           )}
         </AnimatePresence>
+      {/* [ANON_SKIP_START] — remove this block with: sed -i '' '/\[ANON_SKIP_START\]/,/\[ANON_SKIP_END\]/d' "app/respond/[formId]/RespondentFlow.tsx" */}
+      <motion.button
+        type="button"
+        disabled={disabled}
+        onClick={() => { if (!disabled) onSubmit("Stranger"); }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.2, duration: 0.4 }}
+        className="text-sm text-white/40 hover:text-white/70 transition-colors disabled:pointer-events-none underline underline-offset-4 decoration-white/20"
+      >
+        stay anonymous →
+      </motion.button>
+      {/* [ANON_SKIP_END] */}
     </div>
   );
 }
