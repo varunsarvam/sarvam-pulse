@@ -428,7 +428,7 @@ function NameFieldInput({
         onClick={() => { if (!disabled) onSubmit("Stranger"); }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1.2, duration: 0.4 }}
+        transition={{ duration: 0.3 }}
         className="text-sm text-zinc-400 hover:text-zinc-600 transition-colors disabled:pointer-events-none"
       >
         stay anonymous →
