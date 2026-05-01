@@ -425,7 +425,7 @@ function NameFieldInput({
       <motion.button
         type="button"
         disabled={disabled}
-        onClick={() => { if (!disabled) onSubmit("Stranger"); }}
+        onClick={() => { if (!disabled) onSubmit("Unnamed"); }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.3 }}
