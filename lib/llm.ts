@@ -14,7 +14,8 @@ export interface NormalizeResult {
 export async function normalizeAnswer(
   text: string,
   questionIntent: string | null,
-  existingClusters: string[]
+  existingClusters: string[],
+  options: { timeout_ms?: number } = {}
 ): Promise<NormalizeResult> {
   console.time("normalize-total");
   console.time("normalize-prompt-build");
@@ -54,6 +55,7 @@ Response to classify: "${text}"`;
       temperature: 0.1,
       max_tokens: 120,
       top_p: 1,
+      timeout_ms: options.timeout_ms,
       extra_body: {
         chat_template_kwargs: {
           enable_thinking: false,

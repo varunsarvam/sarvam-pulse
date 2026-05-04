@@ -63,6 +63,13 @@ export interface ChatOptions {
   reasoning_effort?: "low" | "medium" | "high" | null;
   extra_body?: Record<string, unknown>;
   stream?: boolean;
+  /**
+   * Hard timeout in ms. The underlying fetch is aborted (and Sarvam connection
+   * closed) when exceeded. Throws an Error with name="TimeoutError".
+   * Critical under concurrent load — without this, a slow Sarvam response
+   * blocks the API route until Vercel's 60s function timeout.
+   */
+  timeout_ms?: number;
 }
 
 export interface ChatResult {
@@ -83,7 +90,7 @@ export async function chatComplete(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<ChatResult> {
-  const { model = "sarvam-105b", reasoning_effort, ...rest } = options;
+  const { model = "sarvam-105b", reasoning_effort, timeout_ms, ...rest } = options;
 
   const body: Record<string, unknown> = {
     model,
@@ -95,21 +102,39 @@ export async function chatComplete(
     body.reasoning_effort = reasoning_effort;
   }
 
-  const res = await fetch("https://api.sarvam.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-subscription-key": SARVAM_API_KEY,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeoutId =
+    timeout_ms !== undefined && timeout_ms > 0
+      ? setTimeout(() => controller.abort(), timeout_ms)
+      : null;
 
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Sarvam chat error ${res.status}: ${error}`);
+  try {
+    const res = await fetch("https://api.sarvam.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-subscription-key": SARVAM_API_KEY,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`Sarvam chat error ${res.status}: ${error}`);
+    }
+
+    return res.json();
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      const e = new Error(`Sarvam chat timed out after ${timeout_ms}ms`);
+      e.name = "TimeoutError";
+      throw e;
+    }
+    throw err;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
-
-  return res.json();
 }
 
 // ─── Streaming Chat Completions ───────────────────────────────────────────────

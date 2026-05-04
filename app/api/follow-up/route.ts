@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
         temperature: 0.6,
         max_tokens: 60,
         top_p: 1,
+        timeout_ms: 4000,
         extra_body: {
           chat_template_kwargs: {
             enable_thinking: false,

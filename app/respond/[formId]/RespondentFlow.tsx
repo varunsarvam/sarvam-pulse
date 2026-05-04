@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
-import { toast } from "sonner";
 import type { AvatarMode } from "@/components/AIPresence";
 import { BackgroundMusic } from "@/components/BackgroundMusic";
 import { PresenceShader, type PresenceShaderMode } from "@/components/PresenceShader";
@@ -779,26 +778,24 @@ function NullReflectionCard({
   );
 }
 
-// ─── Fetch with retry helper ─────────────────────────────────────────────────
+// ─── Fetch with timeout helper ────────────────────────────────────────────────
+// IMPORTANT: we don't retry under concurrent load. Retries compound Sarvam
+// rate-limit pressure and double the user's perceived latency. The /api/answers
+// route inserts the answer to Supabase BEFORE the LLM calls — if the LLM phase
+// fails, the data is already safe and we can advance with a null reflection.
 
-async function fetchWithRetry(
+async function fetchWithTimeout(
   url: string,
   opts: RequestInit,
-  retries = 1
+  timeoutMs: number
 ): Promise<Response> {
-  let lastErr: unknown;
-  for (let i = 0; i <= retries; i++) {
-    try {
-      const res = await fetch(url, opts);
-      if (res.ok) return res;
-      if (i < retries) continue;
-      return res;
-    } catch (e) {
-      lastErr = e;
-      if (i >= retries) break;
-    }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
   }
-  throw lastErr;
 }
 
 // ─── Root component ───────────────────────────────────────────────────────────
@@ -1195,8 +1192,13 @@ export function RespondentFlow({
     let reflection: ReflectionResult | null = null;
 
     if (sessionId && currentQuestion) {
+      // 15s hard cap. Server-side LLM calls each cap at 5s + 2.5s = ~7.5s
+      // worst-case under load; 15s gives ample headroom for slow networks
+      // without leaving the user staring at a stuck loader. If we time out,
+      // the answer was already inserted server-side (Phase 1 of /api/answers)
+      // — we just advance with no reflection.
       try {
-        const res = await fetchWithRetry(
+        const res = await fetchWithTimeout(
           "/api/answers",
           {
             method: "POST",
@@ -1209,7 +1211,7 @@ export function RespondentFlow({
               reflection_history: reflectionHistoryRef.current,
             }),
           },
-          1
+          15000
         );
         if (res.ok) {
           const data = (await res.json()) as {
@@ -1226,14 +1228,16 @@ export function RespondentFlow({
           }
           pendingNullReasonRef.current = data.null_reason ?? null;
           pendingNullDebugInfoRef.current = data.debug_info ?? null;
-        } else {
-          setIsAnswering(false);
-          toast.error("Connection hiccup, please try again");
-          return;
         }
-      } catch {
-        setIsAnswering(false);
-        toast.error("Connection hiccup, please try again");
+        // Non-2xx: silently fall through to advance with null reflection.
+        // Their data is saved; surfacing an error toast just frustrates them
+        // when there's nothing they can do. Server logs capture the failure.
+      } catch (err) {
+        const aborted = err instanceof DOMException && err.name === "AbortError";
+        console.warn(
+          `[handleAnswer] ${aborted ? "timed out" : "fetch failed"}, advancing without reflection:`,
+          err
+        );
       }
     }
 
@@ -1246,16 +1250,20 @@ export function RespondentFlow({
 
     if (eligibleForFollowUp) {
       try {
-        const res = await fetch("/api/follow-up", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            question_prompt: currentQuestion.prompt,
-            question_intent: currentQuestion.intent,
-            answer_text: transcript,
-            tone: form.tone,
-          }),
-        });
+        const res = await fetchWithTimeout(
+          "/api/follow-up",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              question_prompt: currentQuestion.prompt,
+              question_intent: currentQuestion.intent,
+              answer_text: transcript,
+              tone: form.tone,
+            }),
+          },
+          6000
+        );
         if (res.ok) {
           const { follow_up } = await res.json();
           if (follow_up) {
@@ -1270,7 +1278,7 @@ export function RespondentFlow({
           }
         }
       } catch {
-        // fall through to REFLECTION
+        // Follow-up is optional — fall through to REFLECTION on any error.
       }
     }
 
@@ -1287,7 +1295,7 @@ export function RespondentFlow({
     let followUpReflection: ReflectionResult | null = null;
     if (sessionId && currentQuestion) {
       try {
-        const res = await fetchWithRetry(
+        const res = await fetchWithTimeout(
           "/api/answers",
           {
             method: "POST",
@@ -1300,7 +1308,7 @@ export function RespondentFlow({
               reflection_history: reflectionHistoryRef.current,
             }),
           },
-          1
+          15000
         );
         if (res.ok) {
           const data = (await res.json()) as {
@@ -1318,8 +1326,12 @@ export function RespondentFlow({
           pendingNullReasonRef.current = data.null_reason ?? null;
           pendingNullDebugInfoRef.current = data.debug_info ?? null;
         }
-      } catch {
-        toast.error("Connection hiccup, please try again");
+      } catch (err) {
+        const aborted = err instanceof DOMException && err.name === "AbortError";
+        console.warn(
+          `[handleFollowUpAnswer] ${aborted ? "timed out" : "fetch failed"}, falling back to original reflection:`,
+          err
+        );
       }
     }
     goToReflection(

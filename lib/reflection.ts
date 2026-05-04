@@ -462,25 +462,24 @@ export async function generateReflectionCopy(
     .join("\n");
 
   try {
-    const result = await Promise.race([
-      chatComplete(
-        [{ role: "system", content: systemPrompt }],
-        {
-          model: "sarvam-30b",
-          temperature: 0.85,
-          max_tokens: 60,
-          top_p: 1,
-          extra_body: {
-            chat_template_kwargs: {
-              enable_thinking: false,
-            },
+    // Hard 2.5s cap via AbortController — actually cancels the upstream Sarvam
+    // request rather than letting it run to completion in the background.
+    // Important under concurrent load where every wasted request counts.
+    const result = await chatComplete(
+      [{ role: "system", content: systemPrompt }],
+      {
+        model: "sarvam-30b",
+        temperature: 0.85,
+        max_tokens: 60,
+        top_p: 1,
+        timeout_ms: 2500,
+        extra_body: {
+          chat_template_kwargs: {
+            enable_thinking: false,
           },
-        }
-      ),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
-    ]);
-
-    if (!result) return null;
+        },
+      }
+    );
     const text = result.choices?.[0]?.message?.content?.trim() ?? "";
     return text.replace(/^["']|["']$/g, "").trim() || null;
   } catch {

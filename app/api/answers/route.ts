@@ -163,11 +163,23 @@ export async function POST(req: NextRequest) {
         const existingClusters = (
           ((aggRes.data?.clusters ?? []) as Cluster[])
         ).map((c) => c.label);
-        normalizeResult = await normalizeAnswer(
-          answerText,
-          question.intent,
-          existingClusters
-        );
+        // 5s hard cap: if Sarvam is rate-limited / slow under concurrent load,
+        // we'd rather skip clustering than block the user on a stuck loader.
+        // The answer itself is already inserted above (Phase 1) — losing the
+        // cluster label only costs us downstream analytics granularity.
+        try {
+          normalizeResult = await normalizeAnswer(
+            answerText,
+            question.intent,
+            existingClusters,
+            { timeout_ms: 5000 }
+          );
+        } catch (e) {
+          console.warn(
+            "[answers] normalizeAnswer failed, continuing without cluster:",
+            e instanceof Error ? e.message : e
+          );
+        }
       }
     }
 
