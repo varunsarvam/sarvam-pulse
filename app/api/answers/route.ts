@@ -163,16 +163,19 @@ export async function POST(req: NextRequest) {
         const existingClusters = (
           ((aggRes.data?.clusters ?? []) as Cluster[])
         ).map((c) => c.label);
-        // 5s hard cap: if Sarvam is rate-limited / slow under concurrent load,
-        // we'd rather skip clustering than block the user on a stuck loader.
+        // 1.5s hard cap: under concurrent load Sarvam rate-limits, and waiting
+        // 5s for clustering kills the user's perceived speed. Happy-path
+        // normalize is ~500ms, so 1.5s leaves comfortable headroom; anything
+        // slower means Sarvam is struggling and we'd rather ship a fast
+        // reflection (without "tribe" clustering) than make the user wait.
         // The answer itself is already inserted above (Phase 1) — losing the
-        // cluster label only costs us downstream analytics granularity.
+        // cluster label only costs downstream analytics granularity.
         try {
           normalizeResult = await normalizeAnswer(
             answerText,
             question.intent,
             existingClusters,
-            { timeout_ms: 5000 }
+            { timeout_ms: 1500 }
           );
         } catch (e) {
           console.warn(

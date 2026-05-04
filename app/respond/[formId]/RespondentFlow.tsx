@@ -1291,54 +1291,39 @@ export function RespondentFlow({
 
   async function handleFollowUpAnswer(rawValue: unknown, transcript?: string) {
     const currentQuestion = questions[questionIndex];
-    setIsAnswering(true);
-    let followUpReflection: ReflectionResult | null = null;
-    if (sessionId && currentQuestion) {
-      try {
-        const res = await fetchWithTimeout(
-          "/api/answers",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              session_id: sessionId,
-              question_id: currentQuestion.id,
-              raw_value: rawValue,
-              transcript: transcript ?? null,
-              reflection_history: reflectionHistoryRef.current,
-            }),
-          },
-          15000
-        );
-        if (res.ok) {
-          const data = (await res.json()) as {
-            reflection?: ReflectionResult | null;
-            null_reason?: NullReflectionReason | null;
-            debug_info?: string | null;
-          };
-          followUpReflection = (data.reflection as ReflectionResult) ?? null;
-          if (followUpReflection?.type) {
-            reflectionHistoryRef.current = [
-              ...reflectionHistoryRef.current.slice(-5),
-              followUpReflection.type,
-            ];
-          }
-          pendingNullReasonRef.current = data.null_reason ?? null;
-          pendingNullDebugInfoRef.current = data.debug_info ?? null;
-        }
-      } catch (err) {
-        const aborted = err instanceof DOMException && err.name === "AbortError";
-        console.warn(
-          `[handleFollowUpAnswer] ${aborted ? "timed out" : "fetch failed"}, falling back to original reflection:`,
-          err
-        );
-      }
-    }
+
+    // INSTANT advance — the follow-up reuses the original answer's pending
+    // reflection (already computed when the user submitted the parent
+    // question). The follow-up itself is just additional context for analytics
+    // and doesn't need its own reflection round-trip. Saves ~3-7s of wait
+    // time the user previously stared at thinking dots for, with zero UX loss.
     goToReflection(
-      followUpReflection ?? pendingReflectionRef.current,
+      pendingReflectionRef.current,
       pendingNullReasonRef.current,
       pendingNullDebugInfoRef.current
     );
+
+    // Fire-and-forget save. Best-effort: failures only cost analytics
+    // granularity for this follow-up answer; the user already moved on.
+    if (sessionId && currentQuestion) {
+      fetchWithTimeout(
+        "/api/answers",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            question_id: currentQuestion.id,
+            raw_value: rawValue,
+            transcript: transcript ?? null,
+            reflection_history: reflectionHistoryRef.current,
+          }),
+        },
+        15000
+      ).catch((err) => {
+        console.warn("[handleFollowUpAnswer] background save failed:", err);
+      });
+    }
   }
 
   function goToReflection(

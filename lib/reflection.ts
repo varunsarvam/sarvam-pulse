@@ -462,9 +462,11 @@ export async function generateReflectionCopy(
     .join("\n");
 
   try {
-    // Hard 2.5s cap via AbortController — actually cancels the upstream Sarvam
+    // Hard 1.5s cap via AbortController — actually cancels the upstream Sarvam
     // request rather than letting it run to completion in the background.
-    // Important under concurrent load where every wasted request counts.
+    // sarvam-30b normally returns in ~400-600ms; 1.5s gives headroom under
+    // mild load while keeping the total user-facing wait short. If Sarvam is
+    // truly hammered, we fall back to template copy — better than 2.5s waits.
     const result = await chatComplete(
       [{ role: "system", content: systemPrompt }],
       {
@@ -472,7 +474,7 @@ export async function generateReflectionCopy(
         temperature: 0.85,
         max_tokens: 60,
         top_p: 1,
-        timeout_ms: 2500,
+        timeout_ms: 1500,
         extra_body: {
           chat_template_kwargs: {
             enable_thinking: false,
