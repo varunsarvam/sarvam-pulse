@@ -48,9 +48,13 @@ export class IdentityClassificationError extends Error {
 // Configuration
 // =============================================================================
 
-const SARVAM_TIMEOUT_MS = 60_000;
+// Aggressive timeouts: sarvam-105b normally returns in ~2-4s; 8s leaves
+// comfortable headroom under mild load and bails out fast under heavy load
+// rather than holding the user on the LoadingShimmer for a full minute.
+// Two attempts × 8s = 16s worst case (was 3 × 60s = 180s).
+const SARVAM_TIMEOUT_MS = 8_000;
 const SARVAM_MODEL = "sarvam-105b";
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 2;
 
 // =============================================================================
 // Public types
@@ -231,37 +235,39 @@ function buildUserMessage(respondentName: string | null): string {
 async function callSarvamWithTimeout(
   messages: { role: "system" | "user" | "assistant"; content: string }[]
 ): Promise<string> {
-  const result = await Promise.race([
-    chatComplete(messages, {
+  // Hard timeout via AbortController inside chatComplete — actually cancels
+  // the upstream Sarvam request. Was previously a Promise.race soft timeout
+  // that left the request running in the background, compounding rate-limit
+  // pressure under concurrent load.
+  try {
+    const result = await chatComplete(messages, {
       model: SARVAM_MODEL,
       temperature: 0.6,
       max_tokens: 600,
       top_p: 1,
+      timeout_ms: SARVAM_TIMEOUT_MS,
       extra_body: {
         chat_template_kwargs: { enable_thinking: false },
       },
-    }),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(
-            new IdentityClassificationError(
-              "sarvam",
-              `Sarvam call exceeded ${SARVAM_TIMEOUT_MS}ms timeout`
-            )
-          ),
-        SARVAM_TIMEOUT_MS
-      )
-    ),
-  ]);
-  const content = result.choices?.[0]?.message?.content ?? "";
-  if (!content) {
+    });
+    const content = result.choices?.[0]?.message?.content ?? "";
+    if (!content) {
+      throw new IdentityClassificationError(
+        "sarvam",
+        "Sarvam returned empty content"
+      );
+    }
+    return content;
+  } catch (err) {
+    if (err instanceof IdentityClassificationError) throw err;
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new IdentityClassificationError("sarvam", err.message);
+    }
     throw new IdentityClassificationError(
       "sarvam",
-      "Sarvam returned empty content"
+      err instanceof Error ? err.message : "Sarvam call failed"
     );
   }
-  return content;
 }
 
 // =============================================================================

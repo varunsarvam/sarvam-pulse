@@ -139,11 +139,18 @@ export function CompleteStage({
       setRetrying(true);
       setIdentityError(null);
     }
+    // 25s hard cap. Server worst case is ~16s (2 attempts × 8s timeout each)
+    // plus ~1-2s for DB roundtrips, so 25s gives a small buffer. Without this
+    // the user sat on the LoadingShimmer indefinitely whenever Sarvam was
+    // rate-limited under concurrent load.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25_000);
     try {
       const res = await fetch("/api/complete-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sessionId }),
+        signal: controller.signal,
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as {
@@ -162,12 +169,17 @@ export function CompleteStage({
       setRespondentName(data.respondent_name ?? null);
       setIdentityError(null);
     } catch (e) {
+      const aborted = e instanceof DOMException && e.name === "AbortError";
       console.error("[complete-session]:", e);
-      const msg =
-        e instanceof Error ? e.message : "Identity unavailable";
+      const msg = aborted
+        ? "Taking too long — tap to retry"
+        : e instanceof Error
+          ? e.message
+          : "Identity unavailable";
       setIdentityError(msg);
       if (isRetry) setRetryAttempts((n) => n + 1);
     } finally {
+      clearTimeout(timeoutId);
       if (isRetry) setRetrying(false);
     }
   }
