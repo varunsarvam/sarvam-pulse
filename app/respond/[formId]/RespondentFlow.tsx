@@ -1189,57 +1189,12 @@ export function RespondentFlow({
       return;
     }
 
-    let reflection: ReflectionResult | null = null;
-
-    if (sessionId && currentQuestion) {
-      // 15s hard cap. Server-side LLM calls each cap at 5s + 2.5s = ~7.5s
-      // worst-case under load; 15s gives ample headroom for slow networks
-      // without leaving the user staring at a stuck loader. If we time out,
-      // the answer was already inserted server-side (Phase 1 of /api/answers)
-      // — we just advance with no reflection.
-      try {
-        const res = await fetchWithTimeout(
-          "/api/answers",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              session_id: sessionId,
-              question_id: currentQuestion.id,
-              raw_value: rawValue,
-              transcript: transcript ?? null,
-              reflection_history: reflectionHistoryRef.current,
-            }),
-          },
-          15000
-        );
-        if (res.ok) {
-          const data = (await res.json()) as {
-            reflection?: ReflectionResult | null;
-            null_reason?: NullReflectionReason | null;
-            debug_info?: string | null;
-          };
-          reflection = (data.reflection as ReflectionResult) ?? null;
-          if (reflection?.type) {
-            reflectionHistoryRef.current = [
-              ...reflectionHistoryRef.current.slice(-5),
-              reflection.type,
-            ];
-          }
-          pendingNullReasonRef.current = data.null_reason ?? null;
-          pendingNullDebugInfoRef.current = data.debug_info ?? null;
-        }
-        // Non-2xx: silently fall through to advance with null reflection.
-        // Their data is saved; surfacing an error toast just frustrates them
-        // when there's nothing they can do. Server logs capture the failure.
-      } catch (err) {
-        const aborted = err instanceof DOMException && err.name === "AbortError";
-        console.warn(
-          `[handleAnswer] ${aborted ? "timed out" : "fetch failed"}, advancing without reflection:`,
-          err
-        );
-      }
-    }
+    // ── Optimistic flow: fire both /api/answers and /api/follow-up in parallel,
+    //    race against a 1.5s budget. If they land in time, show the reflection
+    //    or transition to follow-up. If not, advance to next question with no
+    //    reflection — the user never waits more than 1.5s on the question card.
+    //    The answer is still saved (server-side insert happens in Phase 1 of
+    //    /api/answers regardless of how long the LLM phase takes).
 
     const eligibleForFollowUp =
       currentQuestion?.follow_up_enabled &&
@@ -1248,9 +1203,36 @@ export function RespondentFlow({
       typeof transcript === "string" &&
       transcript.trim().length > 0;
 
-    if (eligibleForFollowUp) {
-      try {
-        const res = await fetchWithTimeout(
+    type AnswersResp = {
+      reflection?: ReflectionResult | null;
+      null_reason?: NullReflectionReason | null;
+      debug_info?: string | null;
+    };
+    type FollowUpResp = { follow_up?: string | null };
+
+    const answersPromise: Promise<AnswersResp | null> =
+      sessionId && currentQuestion
+        ? fetchWithTimeout(
+            "/api/answers",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                session_id: sessionId,
+                question_id: currentQuestion.id,
+                raw_value: rawValue,
+                transcript: transcript ?? null,
+                reflection_history: reflectionHistoryRef.current,
+              }),
+            },
+            8000
+          )
+            .then((res) => (res.ok ? (res.json() as Promise<AnswersResp>) : null))
+            .catch(() => null)
+        : Promise.resolve(null);
+
+    const followUpPromise: Promise<FollowUpResp | null> = eligibleForFollowUp
+      ? fetchWithTimeout(
           "/api/follow-up",
           {
             method: "POST",
@@ -1262,31 +1244,60 @@ export function RespondentFlow({
               tone: form.tone,
             }),
           },
-          6000
-        );
-        if (res.ok) {
-          const { follow_up } = await res.json();
-          if (follow_up) {
-            pendingReflectionRef.current = reflection;
-            setFollowUpPrompt(follow_up);
-            setIsSpeaking(false);
-            setIsAnswering(false);
-            setAvatarMode("thinking");
-            playTick();
-            setStage("FOLLOWUP");
-            return;
-          }
-        }
-      } catch {
-        // Follow-up is optional — fall through to REFLECTION on any error.
-      }
-    }
+          3000
+        )
+          .then((res) => (res.ok ? (res.json() as Promise<FollowUpResp>) : null))
+          .catch(() => null)
+      : Promise.resolve(null);
 
-    goToReflection(
-      reflection,
-      pendingNullReasonRef.current,
-      pendingNullDebugInfoRef.current
-    );
+    const wonInBudget = await Promise.race([
+      Promise.all([answersPromise, followUpPromise]).then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 1500)),
+    ]);
+
+    if (wonInBudget) {
+      const [answersData, followUpData] = await Promise.all([
+        answersPromise,
+        followUpPromise,
+      ]);
+
+      let reflection: ReflectionResult | null = null;
+      if (answersData) {
+        reflection = (answersData.reflection as ReflectionResult) ?? null;
+        if (reflection?.type) {
+          reflectionHistoryRef.current = [
+            ...reflectionHistoryRef.current.slice(-5),
+            reflection.type,
+          ];
+        }
+        pendingNullReasonRef.current = answersData.null_reason ?? null;
+        pendingNullDebugInfoRef.current = answersData.debug_info ?? null;
+      }
+
+      if (followUpData?.follow_up) {
+        pendingReflectionRef.current = reflection;
+        setFollowUpPrompt(followUpData.follow_up);
+        setIsSpeaking(false);
+        setIsAnswering(false);
+        setAvatarMode("thinking");
+        playTick();
+        setStage("FOLLOWUP");
+        return;
+      }
+
+      goToReflection(
+        reflection,
+        pendingNullReasonRef.current,
+        pendingNullDebugInfoRef.current
+      );
+    } else {
+      // Budget exceeded — advance immediately. Promises keep running in the
+      // background (the answer save will still complete server-side); we just
+      // don't surface their reflection / follow-up to the user. Better than
+      // making them stare at thinking dots.
+      console.warn("[handleAnswer] 1.5s budget exceeded, advancing without reflection");
+      goToReflection(null, null, null);
+    }
   }
 
   async function handleFollowUpAnswer(rawValue: unknown, transcript?: string) {

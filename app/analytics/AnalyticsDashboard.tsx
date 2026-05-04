@@ -499,12 +499,24 @@ function LiveFeed({ items }: { items: LiveFeedItem[] }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function RespondentTable({ respondents }: { respondents: Respondent[] }) {
+  const [search, setSearch] = useState("");
+
   const groups = useMemo(() => {
     const completed = respondents.filter((r) => r.completed_at);
     const inProgress = respondents.filter((r) => !r.completed_at && r.answered > 0);
     const bounced = respondents.filter((r) => !r.completed_at && r.answered === 0);
     return { completed, inProgress, bounced };
   }, [respondents]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return respondents;
+    return respondents.filter((r) => {
+      const name = (r.name ?? "").toLowerCase();
+      const identity = (r.identity_label ?? "").toLowerCase();
+      return name.includes(q) || identity.includes(q);
+    });
+  }, [respondents, search]);
 
   return (
     <motion.section
@@ -513,16 +525,42 @@ function RespondentTable({ respondents }: { respondents: Respondent[] }) {
       transition={{ duration: 0.4, delay: 0.5 }}
       className="mt-6 rounded-2xl border border-zinc-200 bg-white p-5 md:p-7"
     >
-      <SectionHeader
-        eyebrow={`Respondents · ${respondents.length}`}
-        title="Every session, newest first"
-      />
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <SectionHeader
+          eyebrow={`Respondents · ${respondents.length}`}
+          title="Every session, newest first"
+        />
+        <div className="relative">
+          <input
+            type="search"
+            placeholder="Search name or identity…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="font-matter w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none md:w-72"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="font-mono absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-zinc-400 hover:bg-zinc-100"
+            >
+              clear
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="mt-5 grid grid-cols-3 gap-3 border-b border-zinc-100 pb-4">
         <Stat label="Completed" value={groups.completed.length} accent={CARD_COLORS[2]} />
         <Stat label="In progress" value={groups.inProgress.length} accent={CARD_COLORS[0]} />
         <Stat label="Bounced" value={groups.bounced.length} accent="#a1a1aa" />
       </div>
+
+      {search && (
+        <p className="font-mono mt-3 text-[10px] uppercase tracking-widest text-zinc-400">
+          {filtered.length} match{filtered.length === 1 ? "" : "es"} for &ldquo;{search}&rdquo;
+        </p>
+      )}
 
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[640px]">
@@ -536,7 +574,7 @@ function RespondentTable({ respondents }: { respondents: Respondent[] }) {
             </tr>
           </thead>
           <tbody>
-            {respondents.map((r) => {
+            {filtered.map((r) => {
               const status = r.completed_at
                 ? { label: "Completed", color: CARD_COLORS[2] }
                 : r.answered > 0
