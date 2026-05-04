@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PROTECTED = ["/", "/create"];
+const PROTECTED = ["/", "/create", "/analytics"];
 
 function isProtected(pathname: string): boolean {
   return PROTECTED.some((p) =>
