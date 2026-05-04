@@ -139,12 +139,13 @@ export function CompleteStage({
       setRetrying(true);
       setIdentityError(null);
     }
-    // 25s hard cap. Server worst case is ~16s (2 attempts × 8s timeout each)
-    // plus ~1-2s for DB roundtrips, so 25s gives a small buffer. Without this
-    // the user sat on the LoadingShimmer indefinitely whenever Sarvam was
-    // rate-limited under concurrent load.
+    // 12s hard cap. Server worst case is ~6s (1 attempt × 6s timeout) plus
+    // ~1-2s for DB roundtrips and the heuristic fallback, so 12s gives plenty
+    // of buffer. The server now ALWAYS returns an identity (LLM or heuristic
+    // fallback) — this client timeout only fires on actual network/server
+    // failure, in which case we surface a "tap to retry" message.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25_000);
+    const timeoutId = setTimeout(() => controller.abort(), 12_000);
     try {
       const res = await fetch("/api/complete-session", {
         method: "POST",

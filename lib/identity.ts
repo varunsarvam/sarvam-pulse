@@ -18,9 +18,14 @@ import {
  *
  * The output is validated with `identitySchemaFor(allowedLabels)` so the
  * label is GUARANTEED to be one of the form's archetype labels — no
- * paraphrasing, no invented categories. There is intentionally NO generic
- * fallback (e.g. "Quiet Observer"); failures throw and the caller decides
- * how to surface that to the user.
+ * paraphrasing, no invented categories.
+ *
+ * If the LLM fails (timeout, validation error, Sarvam down) we fall back to
+ * `heuristicClassify` — a deterministic keyword-based classifier that maps
+ * the cards/slider answers to the closest archetype. This guarantees the
+ * user always sees an identity card, even under heavy load. The heuristic
+ * is intentionally generic (no name, no answer-specific summary) so it's
+ * obvious-but-not-broken when the LLM path fails.
  */
 
 // =============================================================================
@@ -48,13 +53,14 @@ export class IdentityClassificationError extends Error {
 // Configuration
 // =============================================================================
 
-// Aggressive timeouts: sarvam-105b normally returns in ~2-4s; 8s leaves
-// comfortable headroom under mild load and bails out fast under heavy load
-// rather than holding the user on the LoadingShimmer for a full minute.
-// Two attempts × 8s = 16s worst case (was 3 × 60s = 180s).
-const SARVAM_TIMEOUT_MS = 8_000;
+// Aggressive timeouts: sarvam-105b normally returns in ~2-4s; 6s × 1 attempt
+// caps the user-visible wait on the LoadingShimmer at ~6s server time. If the
+// LLM doesn't respond in 6s we fall back to a deterministic heuristic
+// (see `heuristicClassify` below) so the user ALWAYS sees an identity.
+// Was 8s × 2 = 16s worst case which still felt too long under concurrent load.
+const SARVAM_TIMEOUT_MS = 6_000;
 const SARVAM_MODEL = "sarvam-105b";
-const MAX_ATTEMPTS = 2;
+const MAX_ATTEMPTS = 1;
 
 // =============================================================================
 // Public types
@@ -299,6 +305,97 @@ function parseJson(raw: string): unknown {
 }
 
 // =============================================================================
+// Heuristic fallback (deterministic, no LLM)
+// =============================================================================
+
+/**
+ * Maps the respondent's cards/slider answers to one of the form's archetypes
+ * using simple keyword rules. This is the safety net when Sarvam is
+ * rate-limited or otherwise slow — the user ALWAYS sees a valid identity card,
+ * never an error screen.
+ *
+ * Designed to be archetype-aware (matches by keyword in the label/description)
+ * so it works across forms, not just Sarvam pulse. Falls back to the first
+ * archetype cluster if nothing matches.
+ */
+// respondentName is intentionally not a parameter — the LLM path uses it to
+// address the respondent by name once ("Varun, you ..."), but the heuristic
+// stays generic to avoid awkward grammar ("Varun, you values the team...").
+function heuristicClassify(
+  archetypeClusters: ArchetypeCluster[],
+  answers: ClassificationAnswer[]
+): Identity {
+  // Find the cards/this_or_that/visual_select answer (the "what excites you" question)
+  const choiceAnswer = answers.find((a) =>
+    ["cards", "this_or_that", "visual_select"].includes(a.question_input_type)
+  );
+
+  // Find the emoji_slider answer (energy / mood)
+  const sliderAnswer = answers.find(
+    (a) => a.question_input_type === "emoji_slider"
+  );
+  const energy = sliderAnswer ? Number(sliderAnswer.answer_text) : 50;
+
+  // Helper: find archetype whose label or description contains any of the keywords
+  const findArchetype = (keywords: RegExp): ArchetypeCluster | undefined =>
+    archetypeClusters.find(
+      (a) => keywords.test(a.label) || keywords.test(a.description)
+    );
+
+  let chosen: ArchetypeCluster | undefined;
+
+  // Low energy → "Quietly Disengaged" or similar
+  if (energy < 30) {
+    chosen = findArchetype(/quiet|disengag|withdraw|skeptic/i);
+  }
+
+  // Match cards answer to archetype by keyword
+  if (!chosen && choiceAnswer) {
+    const text = choiceAnswer.answer_text.toLowerCase();
+    if (/mission|impact|purpose|vision/.test(text)) {
+      chosen = findArchetype(/mission|believer|impact|purpose/i);
+    } else if (/tech|build|innovat|engineer|model/.test(text)) {
+      chosen = findArchetype(/tech|builder|engineer/i);
+    } else if (/team|culture|people|colleag/.test(text)) {
+      chosen = findArchetype(/culture|team|collab|people/i);
+    } else if (/market|win|business|product|growth|strateg/.test(text)) {
+      chosen = findArchetype(/pragmat|real|market|business/i);
+    }
+  }
+
+  // Default: first archetype
+  if (!chosen) chosen = archetypeClusters[0];
+
+  // Build a simple summary by quoting the archetype's first sentence as a
+  // fact about the respondent, prefixed with a warm framing. We don't try to
+  // be clever here — this path is meant to ship a valid card, not to compete
+  // with the LLM on prose quality.
+  const summaryFromArchetype = (a: ArchetypeCluster): string => {
+    const firstSentence = (a.description.split(/[.!?]/)[0] ?? a.description)
+      .trim();
+    return `That's you, today: ${firstSentence}.`.slice(0, 200);
+  };
+
+  // Highlights: first 3 indicator signals (or pad with generic phrases)
+  const highlights = chosen.indicator_signals
+    .slice(0, 3)
+    .map((s) => s.slice(0, 60));
+  while (highlights.length < 3) {
+    highlights.push("Showed up with honesty");
+  }
+
+  return {
+    label: chosen.label,
+    summary: summaryFromArchetype(chosen),
+    highlights: [highlights[0], highlights[1], highlights[2]] as [
+      string,
+      string,
+      string,
+    ],
+  };
+}
+
+// =============================================================================
 // Main entry point
 // =============================================================================
 
@@ -391,9 +488,12 @@ export async function classifyIdentity(input: {
     }
   }
 
-  throw new IdentityClassificationError(
-    "validation",
-    `Identity classification failed after ${MAX_ATTEMPTS} attempts`,
-    { issues: lastIssues, attempts: attemptOutputs }
+  // LLM exhausted all attempts — fall back to deterministic heuristic so the
+  // user ALWAYS sees an identity card. This is hackathon-grade graceful
+  // degradation: under heavy Sarvam load we still ship a valid result.
+  // (Was previously: throw → user sees "We couldn't capture your identity".)
+  console.warn(
+    `[identity] LLM failed all ${MAX_ATTEMPTS} attempt(s), using heuristic fallback. Last issues: ${JSON.stringify(lastIssues ?? null)}; attempts: ${attemptOutputs.length}`
   );
+  return heuristicClassify(input.archetypeClusters, input.answers);
 }
