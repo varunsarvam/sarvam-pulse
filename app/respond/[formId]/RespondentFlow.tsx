@@ -1024,9 +1024,17 @@ export function RespondentFlow({
         const cached = preloadCacheRef.current.get(q.id);
         if (cached) {
           next = { id: `Q-${q.id}`, text: cached.phrased, audioUrl: cached.audioUrl };
+        } else {
+          // Preload hasn't finished (or failed). Show the raw prompt with no
+          // audio so the user can read + answer immediately. Without this
+          // fallback the narration stayed null and the question card showed
+          // ThinkingDots forever — user reported "stuck after name" because
+          // Q2's preload races against the now-instant name submit.
+          // Same id as the cached branch so the dedup updater below keeps
+          // this raw version even if the cache fills mid-display (no
+          // mid-typing flicker / TTSPlayer remount).
+          next = { id: `Q-${q.id}`, text: q.prompt, audioUrl: null };
         }
-        // No cached entry yet → next stays null. The preloadProgress dep
-        // re-runs this effect when the cache fills.
       }
     } else if (stage === "FOLLOWUP" && followUpPrompt) {
       const qid = questions[questionIndex]?.id ?? "x";
