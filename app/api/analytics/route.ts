@@ -39,7 +39,12 @@ export async function GET() {
   const supabase = createAdminClient();
   const since = LAUNCH_CUTOFF_ISO;
 
-  const [{ data: form }, { data: questions }, { data: sessions }] = await Promise.all([
+  // Fetch form, questions, and sessions in parallel.
+  // CRITICAL: we surface ANY Supabase error as a 500 instead of silently
+  // returning empty arrays. Previously, a transient Supabase failure caused
+  // the dashboard to render all-zero metrics with no indication of the
+  // underlying issue (so it looked like "the data is gone").
+  const [formRes, questionsRes, sessionsRes] = await Promise.all([
     supabase.from("forms").select("id,title,tone,intent").eq("id", FORM_ID).single(),
     supabase
       .from("questions")
@@ -57,16 +62,44 @@ export async function GET() {
       .order("started_at", { ascending: true }),
   ]);
 
+  if (formRes.error || questionsRes.error || sessionsRes.error) {
+    const errMsg =
+      formRes.error?.message ||
+      questionsRes.error?.message ||
+      sessionsRes.error?.message ||
+      "unknown supabase error";
+    console.error("[analytics] supabase fetch error:", {
+      form: formRes.error?.message,
+      questions: questionsRes.error?.message,
+      sessions: sessionsRes.error?.message,
+    });
+    return NextResponse.json(
+      { error: "supabase_fetch_failed", message: errMsg },
+      { status: 500 }
+    );
+  }
+
+  const form = formRes.data;
+  const questions = questionsRes.data;
+  const sessions = sessionsRes.data;
+
   const sessionList = (sessions ?? []) as Session[];
   const sessionIds = sessionList.map((s) => s.id);
 
   let answersList: Answer[] = [];
   if (sessionIds.length) {
-    const { data: answers } = await supabase
+    const { data: answers, error: answersError } = await supabase
       .from("answers")
       .select("id,session_id,question_id,raw_value,transcript,sentiment,created_at")
       .in("session_id", sessionIds)
       .order("created_at", { ascending: true });
+    if (answersError) {
+      console.error("[analytics] supabase answers fetch error:", answersError.message);
+      return NextResponse.json(
+        { error: "supabase_answers_fetch_failed", message: answersError.message },
+        { status: 500 }
+      );
+    }
     answersList = (answers ?? []) as Answer[];
   }
 
