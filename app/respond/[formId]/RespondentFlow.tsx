@@ -1387,6 +1387,21 @@ export function RespondentFlow({
     setAvatarMode(speaking ? "speaking" : "idle");
   }
 
+  const currentQuestion = questions[questionIndex];
+  const questionPromptForUi =
+    currentQuestion?.input_type === "name"
+      ? NAME_QUESTION_PROMPT
+      : currentQuestion?.prompt ?? "";
+  const questionDisplayText =
+    narrationDisplayText || narration?.text || questionPromptForUi;
+  const followUpDisplayText =
+    narrationDisplayText || narration?.text || followUpPrompt || "";
+  // Live-form invariant: reading/answering must never depend on TTS, preload,
+  // or typewriter state. Those are nice-to-have. If audio is slow or blocked,
+  // the prompt still appears and the input unlocks immediately.
+  const questionUiReady = stage === "QUESTION" || narrationDone;
+  const followUpUiReady = stage === "FOLLOWUP" || narrationDone;
+
   return (
     <div className="relative h-screen overflow-hidden">
       <div className="fixed inset-0 z-0 bg-[url('/bg-blue.png')] bg-cover bg-center" />
@@ -1465,20 +1480,20 @@ export function RespondentFlow({
             </motion.div>
           )}
 
-          {stage === "QUESTION" && questions[questionIndex] && (
+          {stage === "QUESTION" && currentQuestion && (
             <motion.div
               key={`question-${questionIndex}`}
               {...fadeUp}
               className="w-full h-full"
             >
               <QuestionStage
-                question={questions[questionIndex]}
+                question={currentQuestion}
                 index={questionIndex}
                 total={questions.length}
                 onAnswer={handleAnswer}
-                displayText={narrationDisplayText}
-                ttsDone={narrationDone}
-                showFallbackCopy={showFallbackCopy}
+                displayText={questionDisplayText}
+                ttsDone={questionUiReady}
+                showFallbackCopy={showFallbackCopy || Boolean(questionDisplayText)}
                 splitLayout
                 isAnswering={isAnswering}
               />
@@ -1496,9 +1511,9 @@ export function RespondentFlow({
                 }
                 questionIntent={questions[questionIndex]?.intent ?? null}
                 onAnswer={handleFollowUpAnswer}
-                displayText={narrationDisplayText}
-                ttsDone={narrationDone}
-                showFallbackCopy={showFallbackCopy}
+                displayText={followUpDisplayText}
+                ttsDone={followUpUiReady}
+                showFallbackCopy={showFallbackCopy || Boolean(followUpDisplayText)}
                 splitLayout
                 isAnswering={isAnswering}
               />
