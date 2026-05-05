@@ -35,6 +35,14 @@ function getNumberValue(raw: unknown): number | null {
   return null;
 }
 
+function chunks<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
+
 export async function GET() {
   const supabase = createAdminClient();
   const since = LAUNCH_CUTOFF_ISO;
@@ -88,19 +96,30 @@ export async function GET() {
 
   let answersList: Answer[] = [];
   if (sessionIds.length) {
-    const { data: answers, error: answersError } = await supabase
-      .from("answers")
-      .select("id,session_id,question_id,raw_value,transcript,sentiment,created_at")
-      .in("session_id", sessionIds)
-      .order("created_at", { ascending: true });
-    if (answersError) {
-      console.error("[analytics] supabase answers fetch error:", answersError.message);
-      return NextResponse.json(
-        { error: "supabase_answers_fetch_failed", message: answersError.message },
-        { status: 500 }
-      );
+    // Avoid one giant `session_id=in.(...)` URL. Once Sarvam pulse crossed a few
+    // hundred sessions, that request became large enough to intermittently fail
+    // through PostgREST/Vercel, making the dashboard show "HTTP 500".
+    const answerChunks = await Promise.all(
+      chunks(sessionIds, 75).map((ids) =>
+        supabase
+          .from("answers")
+          .select("id,session_id,question_id,raw_value,transcript,sentiment,created_at")
+          .in("session_id", ids)
+          .order("created_at", { ascending: true })
+      )
+    );
+
+    for (const { data: answers, error: answersError } of answerChunks) {
+      if (answersError) {
+        console.error("[analytics] supabase answers fetch error:", answersError.message);
+        return NextResponse.json(
+          { error: "supabase_answers_fetch_failed", message: answersError.message },
+          { status: 500 }
+        );
+      }
+      answersList.push(...((answers ?? []) as Answer[]));
     }
-    answersList = (answers ?? []) as Answer[];
+    answersList.sort((a, b) => a.created_at.localeCompare(b.created_at));
   }
 
   const questionsList = (questions ?? []) as Question[];
