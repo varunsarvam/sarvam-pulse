@@ -1161,8 +1161,11 @@ export function RespondentFlow({
     const currentQuestion = questions[questionIndex];
     setIsAnswering(true);
 
-    // Name question: capture locally, fire the answers POST (which mirrors to
-    // sessions.respondent_name), then advance. No reflection, no follow-up.
+    // Name question: capture locally and advance INSTANTLY. The /api/answers
+    // POST runs fire-and-forget in the background so a slow Vercel cold-start
+    // or transient Supabase blip never traps the user on the loading screen.
+    // The server-side handler short-circuits name questions (DB insert +
+    // sessions.respondent_name update, no LLM) so it's safe to not await.
     if (currentQuestion?.input_type === "name") {
       const value =
         typeof (rawValue as { value?: unknown })?.value === "string"
@@ -1170,8 +1173,11 @@ export function RespondentFlow({
           : "";
       if (value) setRespondentNameSaved(value);
       if (sessionId && currentQuestion) {
-        try {
-          await fetch("/api/answers", {
+        // Fire-and-forget; 5s safety timeout so a stuck request doesn't leak
+        // resources but it never blocks the UI (no `await`).
+        void fetchWithTimeout(
+          "/api/answers",
+          {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1180,10 +1186,13 @@ export function RespondentFlow({
               raw_value: rawValue,
               transcript: null,
             }),
-          });
-        } catch {
-          // Best-effort — name persistence is not blocking.
-        }
+          },
+          5000
+        ).catch(() => {
+          // Best-effort — name persistence isn't blocking. Worst case we lose
+          // the name on this respondent's session row (rare, recoverable via
+          // /api/answers retries from the next question's flow).
+        });
       }
       advanceQuestion();
       return;
